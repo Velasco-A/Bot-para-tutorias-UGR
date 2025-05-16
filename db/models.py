@@ -15,7 +15,7 @@ def create_database():
     cursor = conn.cursor()
     
     cursor.executescript('''
-    -- Tabla de Usuarios (ahora con columna Horario)
+    -- Tabla de Usuarios
     CREATE TABLE IF NOT EXISTS Usuarios (
         Id_usuario INTEGER PRIMARY KEY AUTOINCREMENT,
         Nombre TEXT NOT NULL,
@@ -24,7 +24,7 @@ def create_database():
         Tipo TEXT CHECK(Tipo IN ('estudiante', 'profesor')), 
         Email_UGR TEXT UNIQUE,
         TelegramID INTEGER UNIQUE,
-        Registrado TEXT DEFAULT 'SI',
+        Registrado TEXT DEFAULT 'NO',
         Area TEXT,       -- Incluir área directamente
         Carrera TEXT,    -- Incluir carrera directamente
         Horario TEXT     -- Añadida columna Horario para compatibilidad
@@ -36,7 +36,7 @@ def create_database():
         Nombre_carrera TEXT NOT NULL UNIQUE
     );
     
-    -- Tabla de Asignaturas (con referencia a Carrera)
+    -- Tabla de Asignaturas
     CREATE TABLE IF NOT EXISTS Asignaturas (
         Id_asignatura INTEGER PRIMARY KEY AUTOINCREMENT,
         Nombre TEXT NOT NULL,

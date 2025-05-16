@@ -3,15 +3,18 @@ from telebot import types
 import datetime
 import sys
 import os
+import time
 
 # Añadir directorio padre al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from db.queries import get_user_by_telegram_id, get_db_connection
+from utils.state_manager import user_states, user_data, estados_timestamp
 
-# Referencias externas necesarias
-user_states = {}
-user_data = {}
+# Añadir timestamp cuando se establece un estado
+def set_user_state(chat_id, state):
+    user_states[chat_id] = state
+    estados_timestamp[chat_id] = time.time()
 
 def register_handlers(bot):
     """Registra todos los handlers relacionados con valoraciones"""
@@ -150,7 +153,7 @@ def register_handlers(bot):
                 chat_id,
                 "Por favor, escribe tu comentario sobre el profesor:"
             )
-            user_states[chat_id] = "escribiendo_comentario"
+            set_user_state(chat_id, "escribiendo_comentario")
         else:
             # No quiere dejar comentario, preguntar si valoración anónima
             preguntar_valoracion_anonima(chat_id, bot)

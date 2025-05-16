@@ -46,15 +46,9 @@ def fix_db_queries():
         # Reemplazar hp.Horario por la información formateada de día y hora
         modified = re.sub(
             pattern, 
-            r'\1 Horarios_Profesores hp JOIN Usuarios u ON hp.Id_usuario = u.Id_usuario',
+            r'\1 hp.dia || \' de \' || hp.hora_inicio || \' a \' || hp.hora_fin AS Horario FROM',
             content, 
             flags=re.IGNORECASE | re.DOTALL
-        )
-        
-        # Reemplazar hp.Horario por una concatenación de día y hora
-        modified = modified.replace(
-            "hp.Horario", 
-            "hp.dia || ' de ' || hp.hora_inicio || ' a ' || hp.hora_fin AS Horario"
         )
         
         with open(query_file, 'w', encoding='utf-8') as f:

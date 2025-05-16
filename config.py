@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 # Obtener ruta absoluta al directorio del proyecto
 BASE_DIR = pathlib.Path(__file__).parent.absolute()
 ENV_PATH = BASE_DIR / "datos.env.txt"
+EXCEL_PATH = BASE_DIR / "data" / "usuarios.xlsx"
 
 # Cargar variables de entorno
 print(f"Cargando configuración desde: {ENV_PATH}")
@@ -17,9 +18,9 @@ DB_PATH = BASE_DIR / "tutoria_ugr.db"
 TOKEN = os.getenv("BOT_TOKEN", "TU_TOKEN_AQUI")
 
 # Configuración de email
-SMTP_SERVER = os.getenv("SMTP_SERVER")
-SMTP_EMAIL = os.getenv("SMTP_EMAIL")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_EMAIL = os.getenv("SMTP_EMAIL", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 
 # Mapping de áreas y carreras
 AREA_CARRERAS = {

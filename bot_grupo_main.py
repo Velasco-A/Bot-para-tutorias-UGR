@@ -11,16 +11,14 @@ import logging
 from dotenv import load_dotenv
 
 # Importar utilidades y handlers
-
 from grupo_handlers.grupos import register_handlers as register_grupo_handlers
 from grupo_handlers.valoraciones import register_handlers as register_valoraciones_handlers
 from grupo_handlers.utils import (
-    user_states, user_data, estados_timestamp,
     limpiar_estados_obsoletos, es_profesor, menu_profesor, menu_estudiante, 
-    logger, configurar_logger
+    configurar_logger
 )
-from grupo_handlers.grupos import register_handlers as register_grupo_handlers
-
+# Importar estados desde el manejador central
+from utils.state_manager import user_states, user_data, estados_timestamp
 
 # Configuración de logging
 logger = configurar_logger()
@@ -36,11 +34,15 @@ else:
     load_dotenv()
     logger.warning("No se encontró archivo de variables específico")
 
-# Usar TOKEN_GRUPO o BOT_TOKEN_GRUPOS para el bot de grupos
-BOT_TOKEN = os.getenv("TOKEN_GRUPO") or os.getenv("TOKEN_1")
+# Estandarizar el nombre del token
+BOT_TOKEN = os.getenv("TOKEN_GRUPO")
+if not BOT_TOKEN:
+    logger.warning("TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa")
+    BOT_TOKEN = os.getenv("TOKEN_1")
+    
 if not BOT_TOKEN:
     logger.critical("Token del bot de grupos no encontrado")
-    print("El token del bot de grupos no está configurado. Añade TOKEN_GRUPO o TOKEN_1 en datos.env.txt")
+    print("El token del bot de grupos no está configurado. Añade TOKEN_GRUPO en datos.env.txt")
     sys.exit(1)
 
 # Inicializar el bot

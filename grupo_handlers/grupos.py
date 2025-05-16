@@ -43,6 +43,47 @@ if not logger.handlers:
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
 
+def inicializar_tablas_grupo():
+    """Inicializa las tablas necesarias para la funcionalidad de grupos si no existen"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Crear tabla de grupos si no existe
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS Grupos_tutoria (
+            id_sala INTEGER PRIMARY KEY AUTOINCREMENT,
+            Id_usuario INTEGER NOT NULL,
+            Nombre_sala TEXT NOT NULL,
+            Tipo_sala TEXT NOT NULL,
+            Id_asignatura INTEGER,
+            Fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            Chat_id TEXT,
+            Enlace_invitacion TEXT,
+            FOREIGN KEY (Id_usuario) REFERENCES Usuarios(Id_usuario),
+            FOREIGN KEY (Id_asignatura) REFERENCES Asignaturas(Id_asignatura)
+        )
+        ''')
+        
+        # Crear tabla de miembros de grupo si no existe
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS Miembros_Grupo (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_sala INTEGER NOT NULL,
+            Id_usuario INTEGER NOT NULL,
+            Fecha_union TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (id_sala) REFERENCES Grupos_tutoria(id_sala),
+            FOREIGN KEY (Id_usuario) REFERENCES Usuarios(Id_usuario),
+            UNIQUE(id_sala, Id_usuario)
+        )
+        ''')
+        
+        conn.commit()
+        conn.close()
+        logger.info("Tablas de grupos inicializadas correctamente")
+    except Exception as e:
+        logger.error(f"Error al inicializar tablas de grupos: {e}")
+
 def register_handlers(bot):
     # Inicializar tablas
     inicializar_tablas_grupo()
@@ -58,31 +99,7 @@ def register_handlers(bot):
         if chat_id in estados_timestamp:
             del estados_timestamp[chat_id]
     
-    @bot.message_handler(commands=["crear_grupo"])
-    def handle_crear_grupo(message):
-        """Inicia el proceso de creación de un grupo"""
-        chat_id = message.chat.id
-        user = get_user_by_telegram_id(message.from_user.id)
-        
-        # Verificar que sea profesor
-        if not user or user['Tipo'] != 'profesor':
-            bot.send_message(chat_id, "⚠️ Solo los profesores pueden crear grupos de tutoría.")
-            return
-        
-        # Iniciar proceso
-        bot.send_message(
-            chat_id,
-            "🏫 *Crear Grupo de Tutoría*\n\n"
-            "Para crear un grupo necesito algunos datos.\n\n"
-            "Primero, ¿qué *nombre* quieres darle al grupo?\n"
-            "Ejemplo: 'Tutorías Sistemas Operativos' o 'Avisos Matemáticas II'",
-            parse_mode="Markdown"
-        )
-        
-        # Guardar estado
-        user_states[chat_id] = "crear_grupo_nombre"
-        user_data[chat_id] = {"profesor_id": user['Id_usuario']}
-        estados_timestamp[chat_id] = time.time()
+
     
     @bot.message_handler(func=lambda m: user_states.get(m.chat.id) == "crear_grupo_nombre")
     def handle_grupo_nombre(message):

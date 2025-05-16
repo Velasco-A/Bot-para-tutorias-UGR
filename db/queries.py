@@ -58,98 +58,54 @@ def buscar_usuario_por_email(email):
     conn.close()
     return dict(user) if user else None
 
-def create_user(nombre, tipo, email, telegram_id, apellidos=None, dni=None, horario=None, carrera=None, asignaturas=None):
-    """
-    Crea un nuevo usuario en la base de datos
-    
-    Args:
-        nombre: Nombre del usuario
-        tipo: Tipo de usuario ('estudiante' o 'profesor')
-        email: Correo electrónico
-        telegram_id: ID de Telegram
-        apellidos: Apellidos (opcional)
-        dni: DNI o NIE (opcional)
-        horario: Horario de tutorías (solo para profesores)
-        carrera: Nombre de la carrera del usuario (opcional)
-        asignaturas: Lista de IDs de asignaturas para matricular al usuario (opcional)
-        
-    Returns:
-        int: ID del usuario creado
-    """
+def create_user(nombre, tipo, email, telegram_id=None, apellidos=None, dni=None, carrera=None, Area=None, registrado="NO"):
+    """Crea un nuevo usuario en la base de datos con los datos proporcionados"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        # Si se proporciona carrera, obtener o crear su ID
-        carrera_id = None
-        if carrera:
-            carrera_id = get_o_crear_carrera(carrera)
-        
-        cursor.execute("""
-            INSERT INTO Usuarios (Nombre, Apellidos, DNI, Tipo, Email_UGR, TelegramID, Registrado, Carrera, asignaturas) 
-            VALUES (?, ?, ?, ?, ?, ?, 'SI', ?, ?)
-        """, (nombre, apellidos, dni, tipo, email, telegram_id, carrera_id, asignaturas))
-        
-        # Obtener el ID del usuario insertado
-        cursor.execute("SELECT last_insert_rowid()")
-        user_id = cursor.fetchone()[0]
-        
-        # Si es profesor y hay horario, almacenarlo
-        if tipo == "profesor" and horario:
-            update_horario_profesor(user_id, horario)
-        
-        # Matricular al usuario en las asignaturas si se proporcionan
-        if asignaturas and isinstance(asignaturas, list):
-            for asignatura_id in asignaturas:
-                crear_matricula(user_id, asignatura_id, tipo)
-        
+        cursor.execute(
+            """INSERT INTO Usuarios 
+            (Nombre, Tipo, Email_UGR, TelegramID, Apellidos, DNI, Carrera, Area, Registrado) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (nombre, tipo, email, telegram_id, apellidos, dni, carrera, Area, registrado)
+        )
         conn.commit()
-        return user_id
-    
+        return cursor.lastrowid
     except Exception as e:
+        print(f"Error al crear usuario: {e}")
         conn.rollback()
-        logger.error(f"Error al crear usuario: {e}")
-        raise
+        return None
     finally:
         conn.close()
 
-def update_user(user_id=None, email=None, **kwargs):
-    """
-    Actualiza los datos de un usuario por ID o email
-    
-    Args:
-        user_id: ID del usuario (opcional si se proporciona email)
-        email: Email del usuario (opcional si se proporciona user_id)
-        **kwargs: Campos a actualizar y sus valores
-        
-    Returns:
-        bool: True si se actualizó correctamente
-    """
-    if not kwargs or (user_id is None and email is None):
+def update_user(user_id, **kwargs):
+    """Actualiza los datos de un usuario existente"""
+    if not kwargs:
         return False
         
+    # Asegurar que los campos existen en la tabla
+    valid_fields = ['Nombre', 'Tipo', 'Email_UGR', 'TelegramID', 'Apellidos', 'DNI', 'Carrera', 'Area', 'Registrado', 'Horario']
+    updates = {k: v for k, v in kwargs.items() if k in valid_fields}
+    
+    if not updates:
+        return False
+    
+    # Construir la consulta dinámicamente
+    query = "UPDATE Usuarios SET "
+    query += ", ".join([f"{key} = ?" for key in updates.keys()])
+    query += " WHERE Id_usuario = ?"
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        # Construir consulta dinámica
-        set_clause = ", ".join([f"{key} = ?" for key in kwargs.keys()])
-        values = list(kwargs.values())
-        
-        if user_id is not None:
-            # Actualizar por ID
-            cursor.execute(f"UPDATE Usuarios SET {set_clause} WHERE Id_usuario = ?", values + [user_id])
-        else:
-            # Actualizar por email
-            cursor.execute(f"UPDATE Usuarios SET {set_clause} WHERE Email_UGR = ?", values + [email])
-        
-        success = cursor.rowcount > 0
+        cursor.execute(query, list(updates.values()) + [user_id])
         conn.commit()
-        return success
-    
+        return cursor.rowcount > 0
     except Exception as e:
+        print(f"Error al actualizar usuario: {e}")
         conn.rollback()
-        logger.error(f"Error al actualizar usuario: {e}")
         return False
     finally:
         conn.close()
@@ -303,6 +259,28 @@ def verificar_estudiante_matriculado(estudiante_id, asignatura_id):
     conn.close()
     
     return result['count'] > 0
+
+def get_matriculas_usuario(user_id):
+    """Obtiene las matrículas de un usuario incluyendo nombres de asignatura"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            SELECT m.*, a.Nombre as Asignatura 
+            FROM Matriculas m
+            JOIN Asignaturas a ON m.Id_asignatura = a.Id_asignatura
+            WHERE m.Id_usuario = ?
+        """, (user_id,))
+        
+        # Convertir filas a diccionarios para facilitar su uso
+        result = [dict(row) for row in cursor.fetchall()]
+        return result
+    except Exception as e:
+        print(f"Error al obtener matrículas: {e}")
+        return []
+    finally:
+        conn.close()
 
 # ===== FUNCIONES DE GRUPOS =====
 def crear_grupo_tutoria(profesor_id, nombre_sala, tipo_sala, asignatura_id=None, chat_id=None, enlace=None):
@@ -570,3 +548,89 @@ def get_carreras():
     
     conn.close()
     return carreras
+
+def get_carreras_by_area(area_id=None):
+    """
+    Función de compatibilidad que mantiene la interfaz anterior.
+    Ahora simplemente devuelve todas las carreras sin filtrar por área.
+    
+    Args:
+        area_id: Ignorado, mantenido para compatibilidad
+        
+    Returns:
+        list: Lista de todas las carreras
+    """
+    # Simplemente llamamos a la nueva función sin filtrado por área
+    return get_carreras()
+
+def crear_asignatura(nombre, sigla=None, id_carrera=None):
+    """Crea una nueva asignatura en la base de datos"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar columnas existentes
+        cursor.execute("PRAGMA table_info(Asignaturas)")
+        columnas = [col[1] for col in cursor.fetchall()]
+        
+        # Construir consulta según columnas disponibles
+        if 'Sigla' in columnas and 'Id_carrera' in columnas:
+            cursor.execute(
+                "INSERT INTO Asignaturas (Nombre, Sigla, Id_carrera) VALUES (?, ?, ?)",
+                (nombre, sigla, id_carrera)
+            )
+        elif 'Sigla' in columnas:
+            cursor.execute(
+                "INSERT INTO Asignaturas (Nombre, Sigla) VALUES (?, ?)",
+                (nombre, sigla)
+            )
+        else:
+            # Sin columna Sigla
+            cursor.execute(
+                "INSERT INTO Asignaturas (Nombre) VALUES (?)",
+                (nombre,)
+            )
+        
+        conn.commit()
+        return cursor.lastrowid
+    except Exception as e:
+        print(f"Error al crear asignatura: {e}")
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+def crear_matricula(id_usuario, id_asignatura, tipo_usuario='estudiante', verificar_duplicados=True):
+    """Crea una nueva matrícula para un usuario en una asignatura"""
+    if id_usuario is None or id_asignatura is None:
+        print("Error: Usuario o asignatura inválidos")
+        return False
+        
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        # Verificar si ya existe esta matrícula
+        if verificar_duplicados:
+            cursor.execute(
+                "SELECT * FROM Matriculas WHERE Id_usuario = ? AND Id_asignatura = ?",
+                (id_usuario, id_asignatura)
+            )
+            if cursor.fetchone():
+                # Ya existe, no hacer nada
+                print(f"  ⏩ Matrícula ya existente - omitiendo")
+                return True
+        
+        # Crear nueva matrícula
+        cursor.execute(
+            "INSERT INTO Matriculas (Id_usuario, Id_asignatura, Tipo) VALUES (?, ?, ?)",
+            (id_usuario, id_asignatura, tipo_usuario)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error al crear matrícula: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()

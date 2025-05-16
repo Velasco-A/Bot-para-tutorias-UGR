@@ -23,21 +23,14 @@ import pandas as pd
 from db.queries import (
     get_user_by_telegram_id, 
     create_user, 
-    matricular_usuario,
+    crear_matricula,  
     get_db_connection,
-    update_user_telegram_id,
     update_user,
-    get_o_crear_carrera,
-    crear_matricula
+    get_o_crear_carrera
 )
 
 # Añadir al inicio del archivo
-from utils.state_manager import get_state, set_state, clear_state, user_data, user_states
-
-# Referencias externas necesarias
-user_states = {}
-user_data = {}
-estados_timestamp = {}
+from utils.state_manager import get_state, set_state, clear_state, user_data, user_states, estados_timestamp
 
 # Variables para seguridad de token
 token_intentos_fallidos = {}  # {chat_id: número de intentos}
@@ -61,23 +54,9 @@ if not logger.handlers:
 def register_handlers(bot):
     """Registra todos los handlers del proceso de registro"""
     
-    def get_state(chat_id):
-        """Obtiene el estado actual del usuario de forma segura"""
-        return user_states.get(chat_id, 'INICIO')  # 'INICIO' es el estado predeterminado
-    
-    def set_state(chat_id, state):
-        """Establece el estado del usuario y actualiza el timestamp"""
-        user_states[chat_id] = state
-        estados_timestamp[chat_id] = time.time()
-    
     def reset_user(chat_id):
         """Reinicia el estado y datos del usuario"""
-        if chat_id in user_states:
-            del user_states[chat_id]
-        if chat_id in user_data:
-            del user_data[chat_id]
-        if chat_id in estados_timestamp:
-            del estados_timestamp[chat_id]
+        clear_state(chat_id)
     
     def is_user_registered(chat_id):
         """Verifica si el usuario ya está registrado"""
@@ -167,7 +146,8 @@ def register_handlers(bot):
                 tipo=user_data[chat_id]['tipo'],
                 email=user_data[chat_id]['email'],
                 telegram_id=chat_id,
-                dni=user_data[chat_id].get('dni', '')
+                dni=user_data[chat_id].get('dni', ''),
+                carrera=user_data[chat_id].get('carrera', '')
             )
             
             # Actualizar el campo carrera en la tabla usuarios
@@ -250,7 +230,7 @@ def register_handlers(bot):
         # Verifica si el usuario ya está registrado
         if is_user_registered(chat_id):
             bot.send_message(chat_id, "Ya estás registrado. Puedes usar las funcionalidades disponibles.")
-            reset_user(chat_id)
+            clear_state(chat_id)
             return
 
         # Inicia el proceso simplificado pidiendo solo el correo
@@ -309,7 +289,7 @@ def register_handlers(bot):
                 "⚠️ Este correo ya está registrado. Si ya tienes cuenta, usa los comandos disponibles.\n"
                 "Si necesitas ayuda, contacta con soporte."
             )
-            reset_user(chat_id)
+            clear_state(chat_id)
             return
         
         # Guardar el email
@@ -340,7 +320,7 @@ def register_handlers(bot):
                 parse_mode="Markdown",
                 reply_markup=markup
             )
-            user_states[chat_id] = STATE_VERIFY_TOKEN
+            user_states[chat_id] = STATE_VERIFY_TOKEN  # En lugar de "ESPERANDO_TOKEN"
             estados_timestamp[chat_id] = time.time()
         else:
             bot.send_message(
@@ -351,7 +331,101 @@ def register_handlers(bot):
                 "_Para desarrollo: revisa los logs y la configuración SMTP._",
                 parse_mode="Markdown"
             )
-            reset_user(chat_id)
+            clear_state(chat_id)
+
+    def mostrar_menu_principal(message):
+        """Muestra el menú principal según el tipo de usuario"""
+        chat_id = message.chat.id
+        
+        if chat_id not in user_data:
+            # Si no hay datos del usuario, mostrar mensaje genérico
+            bot.send_message(
+                chat_id,
+                "🤖 Bienvenido al Asistente de Tutorías UGR\n\n"
+                "Usa /help para ver los comandos disponibles."
+            )
+            return
+            
+        # Mensaje según tipo de usuario
+        if user_data[chat_id].get("tipo") == "estudiante":
+            mensaje = (
+                f"📚 *Comandos disponibles:*\n"
+                f"• /help - Ver todos los comandos disponibles\n"
+                f"• /profesores - Ver profesores de tus asignaturas\n"
+                f"• /horarios - Ver horarios de tutorías"
+            )
+        else:  # Si es profesor
+            mensaje = (
+                f"🔔 *Tu próximo paso:*\n"
+                f"Debes crear un grupo de tutoría para cada asignatura que impartes.\n"
+                f"Utiliza el comando /crear_grupo para configurar tus grupos.\n\n"
+                f"📚 *Otros comandos disponibles:*\n"
+                f"• /help - Ver todos los comandos disponibles\n"
+                f"• /configurar_horario - Modificar tu horario de tutorías\n"
+                f"• /mis_tutorias - Ver tus grupos de tutoría activos"
+            )
+        
+        bot.send_message(
+            chat_id,
+            mensaje,
+            parse_mode="Markdown"
+        )
+
+    @bot.message_handler(func=lambda message: get_state(message.chat.id) == STATE_VERIFY_TOKEN)
+    def verificar_token(message):
+        chat_id = message.chat.id
+        token_ingresado = message.text.strip()
+        
+        # Validar el token
+        es_valido = False
+        if chat_id in user_data and "token" in user_data[chat_id]:
+            token_almacenado = user_data[chat_id].get("token")
+            token_expiry = user_data[chat_id].get("token_expiry", 0)
+            
+            if token_ingresado == token_almacenado and time.time() < token_expiry:
+                es_valido = True
+            elif time.time() >= token_expiry:
+                bot.send_message(chat_id, "⚠️ El código ha expirado. Por favor, solicita uno nuevo con /start")
+                clear_state(chat_id)
+                return
+            else:
+                bot.send_message(chat_id, "❌ Código incorrecto. Inténtalo de nuevo o cancela con /cancelar")
+                return
+        
+        if es_valido:
+            try:
+                # Obtener el correo asociado con este chat_id
+                email = user_data[chat_id].get("email")
+                
+                if email:
+                    # Actualizar la base de datos: cambiar Registrado a SI y guardar el TelegramID
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "UPDATE Usuarios SET Registrado = 'SI', TelegramID = ? WHERE Email_UGR = ?", 
+                        (message.from_user.id, email)
+                    )
+                    
+                    # Verificar que se actualizó alguna fila
+                    if cursor.rowcount == 0:
+                        bot.send_message(chat_id, "❌ No se encontró tu correo en la base de datos.")
+                        logger.error(f"No se encontró el email {email} en la base de datos")
+                    else:
+                        conn.commit()
+                        logger.info(f"Usuario {email} verificado correctamente. TelegramID actualizado.")
+                        
+                    conn.close()
+                else:
+                    logger.error("No se encontró email en user_data para la verificación")
+            except Exception as e:
+                logger.error(f"Error al actualizar registro en BD: {e}")
+            
+            # Confirmar al usuario y cambiar estado
+            bot.send_message(message.chat.id, "✅ Verificación exitosa!")
+            clear_state(message.chat.id)  # Limpiar estado
+            
+            # Mostrar menú principal o siguiente paso
+            mostrar_menu_principal(message)
 
     @bot.callback_query_handler(func=lambda call: call.data == "cancelar_registro")
     def handle_cancelar_registro(call):
@@ -363,7 +437,7 @@ def register_handlers(bot):
             "Registro cancelado. Puedes iniciarlo nuevamente con /start cuando lo desees.",
             reply_markup=telebot.types.ReplyKeyboardRemove()
         )
-        reset_user(chat_id)
+        clear_state(chat_id)
         bot.answer_callback_query(call.id)
 
     @bot.callback_query_handler(func=lambda call: user_states.get(call.message.chat.id) == STATE_CONFIRMAR_DATOS and call.data == "confirmar_datos_excel")
@@ -416,7 +490,7 @@ def register_handlers(bot):
             )
             
             # Limpiar estados
-            reset_user(chat_id)
+            clear_state(chat_id)
             logger.info(f"Usuario registrado desde Excel: {user_data[chat_id]['nombre']} {user_data[chat_id]['apellidos']} ({telegram_id})")
             
         except Exception as e:
@@ -428,7 +502,7 @@ def register_handlers(bot):
                 f"Por favor, contacta con soporte.",
                 parse_mode="Markdown"
             )
-            reset_user(chat_id)
+            clear_state(chat_id)
         
         bot.answer_callback_query(call.id)
 
@@ -466,6 +540,6 @@ def register_handlers(bot):
                 "Registro cancelado. Puedes iniciarlo nuevamente con /start cuando lo desees.",
                 reply_markup=telebot.types.ReplyKeyboardRemove()
             )
-            reset_user(chat_id)
+            clear_state(chat_id)
         else:
             bot.send_message(chat_id, "No hay ningún registro en curso para cancelar.")

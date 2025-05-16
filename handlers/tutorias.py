@@ -339,11 +339,55 @@ def register_handlers(bot):
             parse_mode="Markdown"
         )
     
-    
-    
-    
-    
-    
+    @bot.message_handler(commands=['crear_grupo_tutoria'])
+    def handle_crear_grupo_tutoria(message):
+        """Guía simple para crear un grupo de tutoría en Telegram"""
+        chat_id = message.chat.id
+        user = get_user_by_telegram_id(message.from_user.id)
+        
+        # Verificar si el usuario es profesor
+        if not user:
+            bot.send_message(
+                chat_id,
+                "❌ No estás registrado. Usa /start para registrarte."
+            )
+            return
+        
+        if user['Tipo'] != 'profesor':
+            bot.send_message(
+                chat_id,
+                "⚠️ Lo siento, la creación de grupos de tutoría es una función exclusiva para profesores."
+            )
+            return
+        
+        # Instrucciones simples para crear un grupo
+        texto_guia = (
+            "📝 *GUÍA RÁPIDA: CREAR GRUPO DE TUTORÍA*\n\n"
+            
+            "1️⃣ *Crear grupo en Telegram*\n"
+            "• Pulsa el icono de lápiz o '+' en Telegram\n"
+            "• Selecciona 'Nuevo grupo'\n"
+            "• Dale un nombre descriptivo (ej: 'Tutorías Programación')\n\n"
+            
+            "2️⃣ *Añadir el bot*\n"
+            "• En el grupo, pulsa '+' o 'Añadir miembro'\n"
+            "• Busca y añade @UGRTutoriasBot\n\n"
+            
+            "3️⃣ *Hacer administrador al bot*\n"
+            "• Pulsa el nombre del grupo en la parte superior\n"
+            "• Selecciona 'Administradores'\n" 
+            "• Añade al bot como administrador\n"
+            "• Activa TODOS los permisos\n\n"
+            
+            "👉 Ya puedes usar el bot en el grupo para gestionar tutorías"
+        )
+        
+        # Enviar guía
+        bot.send_message(
+            chat_id,
+            texto_guia,
+            parse_mode="Markdown"
+        )
     
     @bot.message_handler(func=lambda m: user_states.get(m.from_user.id, {}).get("estado") == "confirmando_valoracion")
     def procesar_confirmacion_valoracion(message):

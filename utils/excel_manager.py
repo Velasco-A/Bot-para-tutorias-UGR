@@ -124,7 +124,24 @@ def obtener_datos_por_email(email):
     # Retornar datos o None
     return usuarios_excel.get(email_norm)
 
-def cargar_excel():
+def cargar_excel(ruta_excel=None):
+    """Carga el archivo Excel y devuelve un DataFrame"""
+    import pandas as pd
+    from config import EXCEL_PATH
+    
+    # Si no se proporciona ruta, usar la predeterminada
+    if ruta_excel is None:
+        ruta_excel = EXCEL_PATH
+    
+    try:
+        df = pd.read_excel(ruta_excel)
+        print(f"✅ Excel cargado correctamente: {ruta_excel}")
+        return df
+    except Exception as e:
+        print(f"❌ Error al cargar el Excel: {e}")
+        return None
+
+def cargar_excel_a_base_de_datos():
     """Carga datos del Excel a la base de datos"""
     try:
         # Buscar el Excel en la carpeta data y en raíz
@@ -367,7 +384,8 @@ def importar_datos_por_email(email):
                 tipo=user_data.get('Tipo', 'estudiante'),
                 email=email,
                 telegram_id=None,  # Esto se actualizará después
-                dni=user_data.get('DNI', '')
+                dni=user_data.get('DNI', ''),
+                registrado="NO"  # Añadir esta línea
             )
             print(f"✓ Usuario creado: {user_id}")
         
@@ -435,24 +453,197 @@ def importar_datos_por_email(email):
         return False
 
 def verificar_excel_disponible():
-    """Verifica si el archivo Excel está disponible sin cargarlo"""
-    try:
-        posibles_rutas = [
-            Path(__file__).parent.parent / "data" / "usuarios.xlsx",
-            Path(__file__).parent.parent / "usuarios.xlsx",
-        ]
-        
-        for ruta in posibles_rutas:
-            if ruta.exists():
-                print(f"✅ Excel encontrado en: {ruta}")
-                return True
-                
-        return False
-        
-    except Exception as e:
-        print(f"❌ Error al verificar Excel: {e}")
-        return False
+    """Verifica que el archivo Excel existe"""
+    from config import EXCEL_PATH
+    import os
+    
+    return os.path.exists(EXCEL_PATH)
 
-# Para pruebas directas
-if __name__ == "__main__":
-    pass
+def importar_datos_desde_excel(df=None, solo_nuevos=True):
+    """
+    Importa datos del Excel a la BD - solo añade información nueva
+    
+    Args:
+        df: DataFrame opcional
+        solo_nuevos: Si es True, solo importa usuarios/asignaturas que no existan
+    """
+    from db.queries import create_user, update_user, get_matriculas_usuario, crear_matricula
+    import pandas as pd
+    from config import EXCEL_PATH
+    import logging
+    
+    # Configurar logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger('excel_import')
+    
+    # Estadísticas
+    stats = {
+        "usuarios_nuevos": 0,
+        "asignaturas_nuevas": 0,
+        "ignorados": 0
+    }
+    
+    # Cargar Excel si no se proporciona DataFrame
+    if df is None:
+        print(f"📊 Cargando datos desde: {EXCEL_PATH}")
+        df = cargar_excel(EXCEL_PATH)
+        if df is None:
+            return stats
+    
+    # Normalizar nombres de columnas
+    column_mapping = {}
+    for col in df.columns:
+        col_lower = col.lower().strip()
+        if 'email' in col_lower: column_mapping[col] = 'Email'
+        elif 'nombre' in col_lower: column_mapping[col] = 'Nombre'
+        elif 'apellido' in col_lower: column_mapping[col] = 'Apellidos'
+        elif 'dni' in col_lower: column_mapping[col] = 'DNI'
+        elif 'tipo' in col_lower: column_mapping[col] = 'Tipo'
+        elif 'area' in col_lower or 'área' in col_lower: column_mapping[col] = 'Area'
+        elif 'carrera' in col_lower: column_mapping[col] = 'Carrera'
+        elif 'asignatura' in col_lower: column_mapping[col] = 'Asignaturas'
+    
+    # Aplicar mapping
+    if column_mapping:
+        df = df.rename(columns=column_mapping)
+    
+    # Obtener conexión a BD
+    from db.queries import get_db_connection
+    conn = get_db_connection()
+    
+    # Procesar filas
+    for index, row in df.iterrows():
+        try:
+            email = row.get('Email')
+            nombre = row.get('Nombre')
+            
+            if not email or pd.isna(email) or not nombre or pd.isna(nombre):
+                continue
+                
+            # Verificar si el usuario ya existe
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM Usuarios WHERE Email_UGR = ?", (email,))
+            usuario = cursor.fetchone()
+            
+            # Si existe y solo queremos nuevos, solo procesamos asignaturas
+            if usuario and solo_nuevos:
+                user_id = usuario['Id_usuario']
+                # print(f"⏩ Usuario ya existe: {nombre} ({email})")
+            else:
+                # Si no existe, o queremos actualizar, creamos/actualizamos
+                tipo = str(row.get('Tipo', 'estudiante')).lower().strip()
+                apellidos = row.get('Apellidos')
+                dni = row.get('DNI')
+                area = row.get('Area')
+                carrera = row.get('Carrera')
+                
+                if usuario:
+                    # Actualizar si lo queremos
+                    if not solo_nuevos:
+                        update_user(
+                            user_id=usuario['Id_usuario'],
+                            Nombre=nombre,
+                            Apellidos=apellidos,
+                            DNI=dni,
+                            Area=area,
+                            Carrera=carrera
+                        )
+                    user_id = usuario['Id_usuario']
+                else:
+                    # Crear nuevo
+                    user_id = create_user(
+                        nombre=nombre,
+                        tipo=tipo,
+                        email=email,
+                        telegram_id=None,
+                        apellidos=apellidos,
+                        dni=dni,
+                        Area=area,
+                        carrera=carrera,
+                        registrado="NO"
+                    )
+                    stats["usuarios_nuevos"] += 1
+                    print(f"➕ Nuevo usuario: {nombre} ({email})")
+            
+            # Procesar asignaturas para todos los usuarios
+            if user_id:
+                # Obtener asignaturas ya matriculadas
+                asignaturas_actuales = get_matriculas_usuario(user_id)
+                ids_existentes = set()
+                if asignaturas_actuales:
+                    for m in asignaturas_actuales:
+                        ids_existentes.add(m['Id_asignatura'])
+                
+                # Procesar nuevas asignaturas
+                asignaturas_texto = row.get('Asignaturas')
+                if asignaturas_texto and not pd.isna(asignaturas_texto):
+                    # Detectar separador: ; o ,
+                    separadores = [';', ',']
+                    asignaturas_lista = None
+                    for sep in separadores:
+                        if sep in str(asignaturas_texto):
+                            asignaturas_lista = [a.strip() for a in str(asignaturas_texto).split(sep)]
+                            break
+                    
+                    # Si no hay separador, es una sola asignatura
+                    if not asignaturas_lista:
+                        asignaturas_lista = [str(asignaturas_texto).strip()]
+                    
+                    # Procesar cada asignatura
+                    for asig_nombre in asignaturas_lista:
+                        if not asig_nombre.strip():
+                            continue
+                        
+                        try:
+                            # Buscar ID de la asignatura
+                            cursor.execute(
+                                "SELECT Id_asignatura FROM Asignaturas WHERE Nombre = ?", 
+                                (asig_nombre,)
+                            )
+                            result = cursor.fetchone()
+                            
+                            if result:
+                                asig_id = result['Id_asignatura']
+                            else:
+                                # Crear la asignatura automáticamente si no existe
+                                from db.queries import crear_asignatura
+                                asig_id = crear_asignatura(nombre=asig_nombre)
+                                print(f"  ➕ Asignatura creada automáticamente: {asig_nombre}")
+                            
+
+                            # Verificar que se obtuvo un ID válido
+                            if asig_id:
+                                # Guardar tipo localmente en caso de que usuario sea None
+                                tipo_usuario = tipo if isinstance(usuario, dict) and 'Tipo' in usuario else 'estudiante'
+                                
+                                # Crear matrícula con el tipo almacenado
+                                # Solo añadir si no está ya matriculado
+                                crear_matricula(user_id, asig_id, tipo_usuario, verificar_duplicados=solo_nuevos)
+                                
+                                # Si estamos en modo solo_nuevos, debemos verificar duplicados
+                                if solo_nuevos:
+                                    stats["asignaturas_nuevas"] += 1
+                                    print(f"  ➕ Verificada asignatura: {asig_nombre}")
+                                else:
+                                    # Si estamos en modo completo, agregamos todo sin verificar
+                                    stats["asignaturas_nuevas"] += 1
+                                    print(f"  ➕ Nueva asignatura: {asig_nombre}")
+                                
+                                # Procesar la siguiente asignatura (SRC, RIM, etc.)
+                        except Exception as e:
+                            print(f"  ⚠️ Error procesando asignatura {asig_nombre}: {e}")
+                            continue  # Continuar con la siguiente asignatura
+        
+        except Exception as e:
+            print(f"Error en fila {index+1}: {e}")
+    
+    # Cerrar conexión
+    conn.close()
+    
+    # Mostrar estadísticas finales
+    print("\n📊 RESULTADOS:")
+    print(f"✅ Usuarios nuevos: {stats['usuarios_nuevos']}")
+    print(f"✅ Asignaturas añadidas: {stats['asignaturas_nuevas']}")
+    print(f"⏩ Datos ignorados (ya existentes): {stats['ignorados']}")
+    
+    return stats

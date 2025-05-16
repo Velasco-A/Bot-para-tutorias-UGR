@@ -4,8 +4,30 @@ Estados, menús y funciones comunes.
 """
 import time
 import logging
+import sys
+import os
+from pathlib import Path
+
+root_path = str(Path(__file__).parent.parent.absolute())
+if root_path not in sys.path:
+    sys.path.insert(0, root_path)
+# Ahora importamos con una ruta absoluta que evita la ambigüedad
+import importlib.util
+
+# Ruta absoluta al archivo state_manager.py
+state_manager_path = Path(__file__).parent.parent / "utils" / "state_manager.py"
+
+# Cargar el módulo directamente sin depender de imports relativos
+spec = importlib.util.spec_from_file_location("state_manager", state_manager_path)
+state_manager = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(state_manager)
+
+# Obtener las variables
+user_states = state_manager.user_states
+user_data = state_manager.user_data
+estados_timestamp = state_manager.estados_timestamp
+
 from telebot import types
-from utils.state_manager import user_states, user_data, estados_timestamp
 # Importar funciones de la base de datos compartidas
 from db.queries import (
     get_user_by_telegram_id, 

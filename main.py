@@ -4,13 +4,14 @@ import threading
 from telebot import types
 import os
 import sys
-from config import TOKEN, DB_PATH
+from config import TOKEN, DB_PATH,EXCEL_PATH
 
 # Importar funciones para manejar estados
 from utils.state_manager import get_state, set_state, clear_state, user_states, user_data
 
 # Importar funciones para manejar el Excel
-from utils.excel_manager import cargar_excel_en_memoria
+from utils.excel_manager import cargar_excel, importar_datos_desde_excel
+from db.queries import get_db_connection
 
 # Inicializar el bot de Telegram
 bot = telebot.TeleBot(TOKEN)
@@ -22,8 +23,8 @@ def setup_commands():
             telebot.types.BotCommand("/start", "Inicia el bot y el registro"),
             telebot.types.BotCommand("/help", "Muestra la ayuda del bot"),
             telebot.types.BotCommand("/tutoria", "Ver profesores disponibles para tutoría"),
-
             telebot.types.BotCommand("/crear_grupo_tutoria", "Crea un grupo de tutoría"),
+            telebot.types.BotCommand("/configurar_horario", "Configura tu horario de tutorías"),
             telebot.types.BotCommand("/ver_misdatos", "Ver tus datos registrados")
         ])
         print("✅ Comandos del bot configurados correctamente")
@@ -74,22 +75,20 @@ def handle_help(message):
 
 @bot.message_handler(commands=['ver_misdatos'])
 def handle_ver_misdatos(message):
-    """Muestra los datos del usuario"""
-    from db.queries import get_matriculas_by_user
-    
     chat_id = message.chat.id
     user = get_user_by_telegram_id(message.from_user.id)
     
     if not user:
-        bot.send_message(
-            chat_id,
-            "❌ No estás registrado. Usa /start para registrarte."
-        )
+        bot.send_message(chat_id, "❌ No estás registrado. Usa /start para registrarte.")
         return
     
-    matriculas = get_matriculas_by_user(user['Id_usuario'])
+    # Convertir el objeto sqlite3.Row a diccionario
+    user_dict = dict(user)
     
-    # Construir mensaje con los datos del usuario
+    # Obtener matrículas del usuario
+    from db.queries import get_matriculas_usuario
+    matriculas = get_matriculas_usuario(user['Id_usuario'])
+    
     user_info = (
         f"👤 *Datos de usuario:*\n\n"
         f"*Nombre:* {user['Nombre']}\n"
@@ -98,16 +97,19 @@ def handle_ver_misdatos(message):
     )
     
     # Añadir información de matrículas
-    if matriculas:
+    if matriculas and len(matriculas) > 0:
         user_info += "*Asignaturas matriculadas:*\n"
         for m in matriculas:
-            user_info += f"- {m['Asignatura']} ({m['Carrera']})\n"
+            # Convertir cada matrícula a diccionario si es necesario
+            m_dict = dict(m) if hasattr(m, 'keys') else m
+            carrera_nombre = m_dict.get('Carrera', 'Sin carrera asignada')
+            user_info += f"- {m_dict['Asignatura']}\n"
     else:
-        user_info += "No tienes asignaturas matriculadas."
+        user_info += "No tienes asignaturas matriculadas.\n"
     
     # Añadir horario si es profesor
-    if user['Tipo'] == 'profesor' and user['horario']:
-        user_info += f"\n*Horario de tutorías:*\n{user['horario']}"
+    if user['Tipo'] == 'profesor' and 'Horario' in user_dict and user_dict['Horario']:
+        user_info += f"\n*Horario de tutorías:*\n{user_dict['Horario']}"
     
     bot.send_message(chat_id, user_info, parse_mode="Markdown")
 
@@ -117,17 +119,25 @@ from handlers.tutorias import register_handlers as register_tutorias_handlers
 from handlers.horarios import register_handlers as register_horarios_handlers
 from utils.excel_manager import verificar_excel_disponible
 
+# Verificar si es la primera ejecución
+MARKER_FILE = os.path.join(os.path.dirname(DB_PATH), ".initialized")
+primera_ejecucion = not os.path.exists(MARKER_FILE)
+
 # Verificar que el Excel existe pero no cargar datos
 print("📊 Cargando datos académicos...")
-if cargar_excel_en_memoria():
-    print("✅ Datos académicos cargados en memoria")
-else:
-    print("⚠️ No se pudieron cargar los datos académicos")
-
 if verificar_excel_disponible():
-    print("✅ Excel de datos académicos disponible")
+    print("✅ Excel encontrado")
+    # Primera vez - importar todo
+    if primera_ejecucion:  # Usa alguna forma de detectar primer inicio
+        importar_datos_desde_excel(solo_nuevos=False)
+        # Crear archivo marcador para futuras ejecuciones
+        with open(MARKER_FILE, 'w') as f:
+            f.write("Initialized")
+    else:
+        # Ejecuciones posteriores - solo nuevos datos
+        importar_datos_desde_excel(solo_nuevos=True)
 else:
-    print("⚠️ Excel de datos académicos no encontrado. Algunas funciones estarán limitadas.")
+    print("⚠️ Excel no encontrado")
 
 # Registrar todos los handlers
 register_registro_handlers(bot)
