@@ -1,2 +1,20 @@
 2025-05-13 19:59:07,598 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
 2025-05-13 19:59:07,954 [INFO] Bot de Grupos iniciado
+2025-05-17 12:22:03,188 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-17 12:22:03,189 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-17 12:22:03,447 [INFO] Bot de Grupos iniciado
+2025-05-17 12:34:33,671 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-17 12:34:33,672 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-17 12:34:33,934 [INFO] Bot de Grupos iniciado
+2025-05-17 12:44:52,974 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-17 12:44:52,974 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-17 12:44:53,201 [INFO] Bot de Grupos iniciado
+2025-05-17 13:01:34,691 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-17 13:01:34,692 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-17 13:01:34,965 [INFO] Bot de Grupos iniciado
+2025-05-17 13:06:06,110 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-17 13:06:06,110 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-17 13:06:06,411 [INFO] Bot de Grupos iniciado
+2025-05-17 13:06:47,243 [WARNING] Error con Markdown, reintentando sin formato: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: can't parse entities: Can't find end of the entity starting at byte offset 151
+2025-05-17 13:33:32,261 [INFO] Usuario 6437090930 (Alberto) ha iniciado el bot en chat 6437090930
+2025-05-17 13:33:32,508 [INFO] Interfaz de profesor configurada para usuario 6437090930

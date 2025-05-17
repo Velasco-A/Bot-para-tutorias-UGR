@@ -7,9 +7,13 @@ import time
 
 # Añadir directorio padre al path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from db.queries import get_db_connection, get_user_by_telegram_id
 
-from db.queries import get_user_by_telegram_id, get_db_connection
-from utils.state_manager import user_states, user_data, estados_timestamp
+
+# Crear estas variables localmente en vez de importarlas
+user_states = {}
+user_data = {}
+estados_timestamp = {}
 
 # Añadir timestamp cuando se establece un estado
 def set_user_state(chat_id, state):
@@ -205,10 +209,10 @@ def register_handlers(bot):
             cursor.execute(
                 """
                 INSERT INTO Valoraciones 
-                (evaluador_id, profesor_id, puntuacion, comentario, fecha, es_anonimo) 
-                VALUES (?, ?, ?, ?, ?, ?)
+                (evaluador_id, profesor_id, puntuacion, comentario, fecha, es_anonimo, id_sala) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (evaluador_id, profesor_id, puntuacion, comentario, fecha, es_anonimo)
+                (evaluador_id, profesor_id, puntuacion, comentario, fecha, es_anonimo, user_data[chat_id].get("sala_id"))
             )
             conn.commit()
             
@@ -235,24 +239,35 @@ def register_handlers(bot):
         bot.answer_callback_query(call.id)
         
 # Al final del archivo, añade esta función para que sea importable desde otros módulos
-def iniciar_valoracion_profesor(bot, chat_id, profesor_id, message_id=None):
+def iniciar_valoracion_profesor(bot, profesor_id, estudiante_id, sala_id=None):
     """Inicia el proceso de valoración de un profesor desde otro módulo"""
-    # Obtener datos del profesor
+    # Buscar usuario por id
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT * FROM Usuarios WHERE Id_usuario = ?", (estudiante_id,))
+    estudiante = cursor.fetchone()
+    
+    # Si no hay TelegramID, no podemos enviar mensaje
+    if not estudiante or not estudiante.get('TelegramID'):
+        return False
+    
+    chat_id = estudiante['TelegramID']
+    
+    # Obtener datos del profesor
     cursor.execute("SELECT * FROM Usuarios WHERE Id_usuario = ?", (profesor_id,))
     profesor = cursor.fetchone()
-    conn.close()
     
     if not profesor:
-        if message_id:
-            bot.edit_message_text("❌ Profesor no encontrado", chat_id=chat_id, message_id=message_id)
-        else:
-            bot.send_message(chat_id, "❌ Profesor no encontrado")
-        return
+        bot.send_message(chat_id, "❌ Profesor no encontrado")
+        return False
     
     # Guardar datos para el flujo de valoración
-    user_data[chat_id] = {"profesor_id": profesor_id, "profesor_nombre": profesor['Nombre']}
+    user_data[chat_id] = {
+        "profesor_id": profesor_id, 
+        "profesor_nombre": profesor['Nombre'],
+        "estudiante_id": estudiante_id,
+        "sala_id": sala_id
+    }
     
     # Mostrar opciones de valoración (con estrellas)
     markup = types.InlineKeyboardMarkup(row_width=1)
@@ -265,22 +280,12 @@ def iniciar_valoracion_profesor(bot, chat_id, profesor_id, message_id=None):
     ]
     markup.add(*buttons)
     
-    mensaje = f"Vas a valorar la tutoría con: *{profesor['Nombre']}*\n\n¿Qué puntuación le darías?"
+    # Enviar nuevo mensaje
+    bot.send_message(
+        chat_id=chat_id,
+        text=f"Vas a valorar la tutoría con: *{profesor['Nombre']}*\n\n¿Qué puntuación le darías?",
+        reply_markup=markup,
+        parse_mode="Markdown"
+    )
     
-    if message_id:
-        # Editar mensaje existente
-        bot.edit_message_text(
-            text=mensaje,
-            chat_id=chat_id,
-            message_id=message_id,
-            reply_markup=markup,
-            parse_mode="Markdown"
-        )
-    else:
-        # Enviar nuevo mensaje
-        bot.send_message(
-            chat_id=chat_id,
-            text=mensaje,
-            reply_markup=markup,
-            parse_mode="Markdown"
-        )
+    return True

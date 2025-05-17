@@ -462,8 +462,8 @@ def get_horarios_profesor(profesor_id):
         cursor.execute('''
             SELECT 
                 Id_usuario,
-                Horario,
-                Horario as horario_formateado
+                Nombre,
+                Horario
             FROM 
                 Usuarios
             WHERE 
@@ -472,16 +472,15 @@ def get_horarios_profesor(profesor_id):
         
         result = cursor.fetchone()
         
-        # Si no hay resultado, devolver una lista vacía para mantener consistencia
-        if not result:
-            return []
+        if not result or not result['Horario']:
+            print(f"No se encontró horario para profesor ID: {profesor_id}")
+            return None
             
-        # Si solo hay un horario, devolver una lista con un solo elemento
-        return [result]
+        return result['Horario']
     except Exception as e:
         import logging
-        logging.getLogger('db.queries').error(f"Error al obtener horario de profesor: {e}")
-        return []
+        logging.getLogger('db.queries').error(f"Error al obtener horario: {e}")
+        return None
     finally:
         conn.close()
 

@@ -197,3 +197,33 @@ def guardar_usuario_en_grupo(user_id, username, chat_id):
     except Exception as e:
         logger.error(f"Error guardando usuario en grupo: {e}")
         return False
+
+def escape_markdown(text):
+    """Escapa caracteres especiales de Markdown"""
+    if not text:
+        return ""
+    # Caracteres especiales en Markdown V2
+    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    for char in special_chars:
+        text = text.replace(char, '\\' + char)
+    return text
+
+def send_markdown_message(bot, chat_id, text, reply_markup=None):
+    """Envía un mensaje con Markdown escapando correctamente los caracteres especiales"""
+    try:
+        # Intentar enviar con Markdown
+        return bot.send_message(
+            chat_id,
+            text,
+            parse_mode="Markdown",
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        # Si falla, intentar sin formato
+        logger.warning(f"Error al enviar mensaje con Markdown: {e}")
+        return bot.send_message(
+            chat_id,
+            text,
+            parse_mode=None,
+            reply_markup=reply_markup
+        )

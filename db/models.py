@@ -65,6 +65,8 @@ def create_database():
         Id_asignatura INTEGER,
         Chat_id TEXT UNIQUE,
         Enlace_invitacion TEXT,
+        Proposito_sala TEXT,
+        Fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (Id_usuario) REFERENCES Usuarios(Id_usuario),
         FOREIGN KEY (Id_asignatura) REFERENCES Asignaturas(Id_asignatura)
     );
@@ -90,6 +92,7 @@ def create_database():
         comentario TEXT,
         fecha TEXT,
         es_anonimo INTEGER DEFAULT 0,
+        id_sala INTEGER,
         FOREIGN KEY (evaluador_id) REFERENCES Usuarios(Id_usuario),
         FOREIGN KEY (profesor_id) REFERENCES Usuarios(Id_usuario)
     );
@@ -110,5 +113,36 @@ def create_database():
     print(f"✅ Base de datos creada exitosamente en: {DB_PATH}")
     print("   Estructura de base de datos lista para cargar datos del Excel")
 
+def actualizar_estructura_tablas():
+    """Actualiza la estructura de las tablas existentes según sea necesario"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Verificar y actualizar Grupos_tutoria
+    try:
+        cursor.execute("SELECT Proposito_sala FROM Grupos_tutoria LIMIT 1")
+    except:
+        print("Actualizando Grupos_tutoria: añadiendo columna Proposito_sala")
+        cursor.execute("ALTER TABLE Grupos_tutoria ADD COLUMN Proposito_sala TEXT")
+    
+    try:
+        cursor.execute("SELECT Fecha_creacion FROM Grupos_tutoria LIMIT 1")
+    except:
+        print("Actualizando Grupos_tutoria: añadiendo columna Fecha_creacion")
+        cursor.execute("ALTER TABLE Grupos_tutoria ADD COLUMN Fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    
+    # Verificar y actualizar Valoraciones
+    try:
+        cursor.execute("SELECT id_sala FROM Valoraciones LIMIT 1")
+    except:
+        print("Actualizando Valoraciones: añadiendo columna id_sala")
+        cursor.execute("ALTER TABLE Valoraciones ADD COLUMN id_sala INTEGER")
+    
+    conn.commit()
+    conn.close()
+    print("✅ Estructura de tablas actualizada correctamente")
+
+# Agregar esto al bloque principal para que se ejecute al iniciar
 if __name__ == "__main__":
     create_database()
+    actualizar_estructura_tablas()

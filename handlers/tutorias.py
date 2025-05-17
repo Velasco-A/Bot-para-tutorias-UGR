@@ -6,6 +6,9 @@ import datetime
 import time  # Faltaba esta importación
 import logging  # Para usar logger
 
+# Importar esta función al principio del archivo
+from grupo_handlers.utils import escape_markdown
+
 # Configurar logger
 logger = logging.getLogger(__name__)
 
@@ -19,6 +22,27 @@ from db.queries import (
     get_db_connection
 )
 
+# Añadir la función directamente en este archivo
+def escape_markdown(text):
+    """Escapa caracteres especiales de Markdown para evitar errores de formato"""
+    if not text:
+        return ""
+        
+    # Caracteres que necesitan escape en Markdown
+    markdown_chars = ['_', '*', '`', '[', ']', '(', ')', '#', '+', '-', '.', '!']
+    
+    # Reemplazar cada caracter especial con su versión escapada
+    result = text
+    for char in markdown_chars:
+        result = result.replace(char, '\\' + char)
+        
+    return result
+
+
+
+
+
+
 # Referencias externas necesarias
 user_states = {}
 user_data = {}
@@ -29,404 +53,414 @@ def register_handlers(bot):
     
     @bot.message_handler(commands=['tutoria'])
     def handle_tutoria_command(message):
-        """Maneja el comando /tutoria para buscar profesores de las mismas asignaturas"""
+        """Muestra profesores y salas disponibles para las asignaturas del estudiante"""
         chat_id = message.chat.id
         user = get_user_by_telegram_id(message.from_user.id)
         
         if not user:
-            bot.send_message(
-                chat_id,
-                "❌ No estás registrado. Usa /start para registrarte."
-            )
+            bot.send_message(chat_id, "❌ No estás registrado. Usa /start para registrarte.")
             return
         
         if user['Tipo'] != 'estudiante':
-            bot.send_message(
-                chat_id,
-                "⚠️ Esta funcionalidad está disponible solo para estudiantes."
-            )
+            bot.send_message(chat_id, "⚠️ Esta funcionalidad está disponible solo para estudiantes.")
             return
         
-        # Obtener las asignaturas en las que está matriculado el estudiante
+        # Obtener las asignaturas del estudiante
         conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT a.Id_asignatura, a.Nombre as Asignatura, c.Nombre_carrera as Carrera  
+            SELECT a.Id_asignatura, a.Nombre as Asignatura
             FROM Matriculas m
             JOIN Asignaturas a ON m.Id_asignatura = a.Id_asignatura
-            LEFT JOIN Carreras c ON a.Id_carrera = c.id_carrera
             WHERE m.Id_usuario = ?
         """, (user['Id_usuario'],))
         
         asignaturas = cursor.fetchall()
         
         if not asignaturas:
-            bot.send_message(
-                chat_id,
-                "❌ No estás matriculado en ninguna asignatura.\n"
-                "Usa /registrar_otra_carrera para matricularte en alguna asignatura."
-            )
+            bot.send_message(chat_id, "❌ No estás matriculado en ninguna asignatura.")
+            conn.close()
             return
         
-        # Obtener los profesores que imparten esas mismas asignaturas
+        # Obtener profesores y salas para asignaturas del estudiante
         asignaturas_ids = [a['Id_asignatura'] for a in asignaturas]
         placeholders = ','.join(['?'] * len(asignaturas_ids))
         
         cursor.execute(f"""
-            SELECT DISTINCT u.Id_usuario, u.Nombre, u.Email_UGR, u.horario, 
-                   GROUP_CONCAT(DISTINCT a.Nombre) as Asignaturas
+            SELECT 
+                u.Id_usuario, 
+                u.Nombre, 
+                u.Apellidos,
+                u.Email_UGR, 
+                u.horario, 
+                a.Id_asignatura,
+                a.Nombre as NombreAsignatura,
+                g.id_sala,
+                g.Nombre_sala,
+                g.Proposito_sala,
+                g.Enlace_invitacion,
+                g.Tipo_sala
             FROM Usuarios u
             JOIN Matriculas m ON u.Id_usuario = m.Id_usuario
             JOIN Asignaturas a ON m.Id_asignatura = a.Id_asignatura
+            LEFT JOIN Grupos_tutoria g ON (u.Id_usuario = g.Id_usuario AND (g.Id_asignatura = a.Id_asignatura OR g.Id_asignatura IS NULL))
             WHERE u.Tipo = 'profesor' AND m.Id_asignatura IN ({placeholders})
-            GROUP BY u.Id_usuario
-            ORDER BY u.Nombre
+            ORDER BY u.Nombre, a.Nombre
         """, asignaturas_ids)
         
-        profesores = cursor.fetchall()
+        resultados = cursor.fetchall()
         conn.close()
         
-        if not profesores:
-            bot.send_message(
-                chat_id,
-                "❌ No se encontraron profesores para tus asignaturas matriculadas.\n"
-                "Consulta con tu coordinador de curso."
-            )
+        if not resultados:
+            bot.send_message(chat_id, "❌ No se encontraron profesores para tus asignaturas.")
             return
         
-        # Mostrar lista de profesores con sus asignaturas
-        mensaje = "👨‍🏫 *Profesores disponibles para tus asignaturas:*\n\n"
+        # Organizar resultados por profesor > asignatura > salas
+        profesores = {}
         
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        
-        for i, prof in enumerate(profesores, 1):
-            horario = prof['horario'] if prof['horario'] else "No especificado"
-            mensaje += (
-                f"{i}. *{prof['Nombre']}*\n"
-                f"   📧 Email: {prof['Email_UGR']}\n"
-                f"   📚 Asignaturas: {prof['Asignaturas']}\n"
-                f"   🕗 Horario: {horario}\n\n"
-            )
+        for r in resultados:
+            profesor_id = r['Id_usuario']
             
-            # Añadir botón para contactar con este profesor
-            markup.add(types.InlineKeyboardButton(
-                f"Contactar a {prof['Nombre'][:15]}...",
-                callback_data=f"contactar_prof_{prof['Id_usuario']}"
-            ))
+            if profesor_id not in profesores:
+                profesores[profesor_id] = {
+                    'nombre': f"{r['Nombre']} {r['Apellidos'] or ''}",
+                    'email': r['Email_UGR'],
+                    'horario': r['horario'] or "No especificado",
+                    'asignaturas': {}
+                }
+            
+            asig_id = r['Id_asignatura']
+            if asig_id not in profesores[profesor_id]['asignaturas']:
+                profesores[profesor_id]['asignaturas'][asig_id] = {
+                    'nombre': r['NombreAsignatura'],
+                    'salas': []
+                }
+            
+            if r['id_sala']:
+                # Evitar duplicados
+                sala_existente = False
+                for sala in profesores[profesor_id]['asignaturas'][asig_id]['salas']:
+                    if sala['id'] == r['id_sala']:
+                        sala_existente = True
+                        break
+                
+                if not sala_existente:
+                    proposito = r['Proposito_sala'] or "General"
+                    proposito_texto = {
+                        'individual': "Tutorías individuales",
+                        'grupal': "Tutorías grupales",
+                        'avisos': "Canal de avisos"
+                    }.get(proposito, proposito)
+                    
+                    profesores[profesor_id]['asignaturas'][asig_id]['salas'].append({
+                        'id': r['id_sala'],
+                        'nombre': r['Nombre_sala'],
+                        'proposito': proposito_texto,
+                        'proposito_original': proposito,
+                        'enlace': r['Enlace_invitacion'],
+                        'tipo': r['Tipo_sala']
+                    })
         
+        # Generar mensaje
+        mensaje = "👨‍🏫 *Profesores y salas disponibles:*\n\n"
+        
+        # Inicializar botones
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        botones_salas = []
+        
+        for profesor_id, prof_info in profesores.items():
+            mensaje += f"*{escape_markdown(prof_info['nombre'])}*\n"
+            mensaje += f"📧 Email: {escape_markdown(prof_info['email'])}\n"
+            mensaje += f"🕗 Horario: {escape_markdown(prof_info['horario'])}\n\n"
+            
+            for asig_id, asig_info in prof_info['asignaturas'].items():
+                mensaje += f"📚 *{escape_markdown(asig_info['nombre'])}*\n"
+                
+                if asig_info['salas']:
+                    for sala in asig_info['salas']:
+                        mensaje += f"   • *{escape_markdown(sala['nombre'])}*: {sala['proposito']}\n"
+                        
+                        # Añadir botón según tipo de sala
+                        if sala['proposito_original'] == 'avisos':
+                            # Para salas de avisos: enlace directo
+                            if sala['enlace']:
+                                botones_salas.append({
+                                    'texto': f"📢 Unirse a canal: {sala['nombre']}",
+                                    'url': sala['enlace'],
+                                    'callback': None
+                                })
+                        else:
+                            # Para tutorías individuales: verificación previa
+                            botones_salas.append({
+                                'texto': f"👨‍🏫 Solicitar tutoría: {sala['nombre']}",
+                                'url': None,
+                                'callback': f"solicitar_sala_{sala['id']}_{profesor_id}"
+                            })
+                else:
+                    mensaje += f"   • No hay salas disponibles para esta asignatura\n"
+                
+                mensaje += "\n"
+        
+        # Crear botones
+        for boton in botones_salas:
+            if boton['url']:
+                markup.add(types.InlineKeyboardButton(
+                    text=boton['texto'],
+                    url=boton['url']
+                ))
+            else:
+                markup.add(types.InlineKeyboardButton(
+                    text=boton['texto'],
+                    callback_data=boton['callback']
+                ))
+        
+        # Enviar mensaje
         bot.send_message(
-            chat_id,
-            mensaje,
+            chat_id, 
+            mensaje, 
             reply_markup=markup,
-            parse_mode="Markdown"
+            parse_mode="Markdown",
+            disable_web_page_preview=True
         )
-        user_states[chat_id] = "seleccionando_profesor_tutoria"
     
-    @bot.callback_query_handler(func=lambda call: user_states.get(call.message.chat.id) == "seleccionando_area_tutoria" and call.data.startswith("tutoria_area_"))
-    def handle_area_tutoria(call):
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("solicitar_sala_"))
+    def handle_solicitar_sala(call):
+        """Gestiona la solicitud de acceso a una sala de tutoría individual"""
         chat_id = call.message.chat.id
-        area_id = int(call.data.split("_")[2])
+        data = call.data.split("_")
+        sala_id = int(data[2])
+        profesor_id = int(data[3])
         
-        user_data[chat_id] = {"area_id": area_id}
+        # Obtener datos del estudiante
+        estudiante = get_user_by_telegram_id(call.from_user.id)
         
-        # Mostrar carreras del área seleccionada
-        carreras = get_carreras_by_area(area_id)
-        markup = types.InlineKeyboardMarkup()
-        
-        for carrera in carreras:
-            markup.add(types.InlineKeyboardButton(
-                text=carrera['Nombre_carrera'],
-                callback_data=f"tutoria_carrera_{carrera['id_carrera']}"
-            ))
-        
-        bot.send_message(
-            chat_id,
-            "✅ Área seleccionada.\n\n"
-            "Ahora, selecciona la carrera:",
-            reply_markup=markup
-        )
-        user_states[chat_id] = "seleccionando_carrera_tutoria"
-        
-        bot.answer_callback_query(call.id)
-    
-    @bot.callback_query_handler(func=lambda call: user_states.get(call.message.chat.id) == "seleccionando_carrera_tutoria" and call.data.startswith("tutoria_carrera_"))
-    def handle_carrera_tutoria(call):
-        chat_id = call.message.chat.id
-        carrera_id = int(call.data.split("_")[2])
-        
-        user_data[chat_id]["carrera_id"] = carrera_id
-        
-        # Buscar profesores de esta carrera
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Query para buscar profesores que dan clase en esta carrera
-        cursor.execute("""
-            SELECT DISTINCT u.Id_usuario, u.Nombre, u.Email_UGR, u.horario
-            FROM Usuarios u
-            JOIN Matriculas m ON u.Id_usuario = m.Id_usuario
-            JOIN Asignaturas a ON m.Id_asignatura = a.Id_asignatura
-            WHERE u.Tipo = 'profesor' AND a.Id_carrera = ?
-            ORDER BY u.Nombre
-        """, (carrera_id,))
-        
-        profesores = cursor.fetchall()
-        conn.close()
-        
-        if not profesores:
-            bot.send_message(
-                chat_id,
-                "❌ No se encontraron profesores para esta carrera.\n"
-                "Intenta con otra carrera o área académica."
-            )
-            user_states.pop(chat_id, None)
-            user_data.pop(chat_id, None)
+        if not estudiante:
+            bot.send_message(chat_id, "❌ Error: No se encontró tu registro de usuario.")
             bot.answer_callback_query(call.id)
             return
         
-        # Mostrar lista de profesores
-        mensaje = "👨‍🏫 *Profesores disponibles:*\n\n"
+        # Obtener datos de la sala y profesor
+        conn = get_db_connection()
+        cursor = conn.cursor()
         
-        for i, prof in enumerate(profesores, 1):
-            horario = prof['horario'] if prof['horario'] else "No especificado"
-            mensaje += (
-                f"{i}. *{prof['Nombre']}*\n"
-                f"   📧 Email: {prof['Email_UGR']}\n"
-                f"   🕗 Horario: {horario}\n\n"
-            )
+        cursor.execute("""
+            SELECT g.*, u.Nombre as NombreProfesor, u.TelegramID, u.horario
+            FROM Grupos_tutoria g
+            JOIN Usuarios u ON g.Id_usuario = u.Id_usuario
+            WHERE g.id_sala = ? AND g.Id_usuario = ?
+        """, (sala_id, profesor_id))
+        
+        sala = cursor.fetchone()
+        conn.close()
+        
+        if not sala:
+            bot.send_message(chat_id, "❌ La sala solicitada no está disponible.")
+            bot.answer_callback_query(call.id)
+            return
+        
+        # Verificar si es una sala de tutorías individuales
+        if sala['Proposito_sala'] != 'individual':
+            # Si no es tutoría individual, proporcionar enlace directo
+            if sala['Enlace_invitacion']:
+                bot.send_message(
+                    chat_id,
+                    f"✅ Puedes unirte directamente a la sala *{escape_markdown(sala['Nombre_sala'])}*:",
+                    parse_mode="Markdown"
+                )
+                bot.send_message(
+                    chat_id,
+                    f"[Unirse a la sala]({sala['Enlace_invitacion']})",
+                    parse_mode="Markdown",
+                    disable_web_page_preview=False
+                )
+            else:
+                bot.send_message(chat_id, "❌ El enlace de esta sala no está disponible.")
             
-            # Crear botones para solicitar tutorías
-            if i == 1:
-                markup = types.InlineKeyboardMarkup(row_width=2)
-                for p in profesores:
-                    markup.add(types.InlineKeyboardButton(
-                        f"Contactar a {p['Nombre'][:15]}...",
-                        callback_data=f"contactar_prof_{p['Id_usuario']}"
-                    ))
+            bot.answer_callback_query(call.id)
+            return
         
+        # Para tutorías individuales, verificar el horario del profesor
+        hora_actual = datetime.datetime.now().time()
+        dia_actual = datetime.datetime.now().strftime('%A').lower()  # día en inglés, minúsculas
+        
+        # Traducción de días
+        traduccion_dias = {
+            'monday': 'lunes',
+            'tuesday': 'martes',
+            'wednesday': 'miércoles',
+            'thursday': 'jueves',
+            'friday': 'viernes',
+            'saturday': 'sábado',
+            'sunday': 'domingo'
+        }
+        
+        dia_actual_es = traduccion_dias.get(dia_actual, dia_actual)
+        
+        # Verificar si estamos en horario de tutoría
+        en_horario = False
+        horario_texto = sala['horario'] or ""
+        
+        # Formato esperado: "lunes 10:00-12:00, miércoles 16:00-18:00"
+        if horario_texto:
+            bloques = horario_texto.split(',')
+            for bloque in bloques:
+                bloque = bloque.strip()
+                if not bloque:
+                    continue
+                
+                partes = bloque.split(' ')
+                if len(partes) >= 2:
+                    dia = partes[0].lower()
+                    rango = partes[1]
+                    
+                    if dia == dia_actual_es and '-' in rango:
+                        horas = rango.split('-')
+                        if len(horas) == 2:
+                            hora_inicio = datetime.datetime.strptime(horas[0], "%H:%M").time()
+                            hora_fin = datetime.datetime.strptime(horas[1], "%H:%M").time()
+                            
+                            if hora_inicio <= hora_actual <= hora_fin:
+                                en_horario = True
+                                break
+        
+        if not en_horario:
+            bot.send_message(
+                chat_id,
+                f"⚠️ Lo siento, el profesor *{escape_markdown(sala['NombreProfesor'])}* "
+                f"no está en horario de tutorías ahora mismo.\n\n"
+                f"Horario disponible: *{escape_markdown(horario_texto)}*\n\n"
+                f"Por favor, intenta acceder durante el horario establecido.",
+                parse_mode="Markdown"
+            )
+            bot.answer_callback_query(call.id)
+            return
+        
+        # Estamos en horario, enviar solicitud al profesor
+        if not sala['TelegramID']:
+            bot.send_message(
+                chat_id,
+                "❌ No se puede contactar con el profesor. Por favor, usa el email."
+            )
+            bot.answer_callback_query(call.id)
+            return
+        
+        # Notificar al estudiante
         bot.send_message(
             chat_id,
-            mensaje,
+            f"✅ Solicitud enviada al profesor *{escape_markdown(sala['NombreProfesor'])}*.\n\n"
+            f"Espera mientras se procesa tu solicitud. Recibirás una notificación cuando "
+            f"el profesor responda.",
+            parse_mode="Markdown"
+        )
+        
+        # Enviar solicitud al profesor
+        markup = types.InlineKeyboardMarkup(row_width=3)
+        markup.add(
+            types.InlineKeyboardButton("✅ Aceptar", callback_data=f"aprobar_tut_{estudiante['Id_usuario']}_{sala_id}"),
+            types.InlineKeyboardButton("⏳ En espera", callback_data=f"espera_tut_{estudiante['Id_usuario']}_{sala_id}"),
+            types.InlineKeyboardButton("❌ Rechazar", callback_data=f"rechazar_tut_{estudiante['Id_usuario']}_{sala_id}")
+        )
+        
+        bot.send_message(
+            sala['TelegramID'],
+            f"🔔 *Solicitud de tutoría*\n\n"
+            f"El estudiante *{escape_markdown(estudiante['Nombre'])} {escape_markdown(estudiante['Apellidos'] or '')}* "
+            f"solicita acceso a tu sala de tutorías *{escape_markdown(sala['Nombre_sala'])}*.\n\n"
+            f"¿Deseas permitir el acceso?",
             reply_markup=markup,
             parse_mode="Markdown"
         )
-        user_states[chat_id] = "seleccionando_profesor_tutoria"
         
         bot.answer_callback_query(call.id)
     
-    @bot.callback_query_handler(func=lambda call: user_states.get(call.message.chat.id) == "seleccionando_profesor_tutoria" and call.data.startswith("contactar_prof_"))
-    def handle_contactar_profesor(call):
+    # Handlers para respuestas del profesor
+    @bot.callback_query_handler(func=lambda call: call.data.startswith(("aprobar_tut_", "espera_tut_", "rechazar_tut_")))
+    def handle_respuesta_profesor(call):
+        """Procesa la respuesta del profesor a una solicitud de tutoría"""
         chat_id = call.message.chat.id
-        profesor_id = int(call.data.split("_")[2])
+        action = call.data.split("_")[0]
+        estudiante_id = int(call.data.split("_")[2])
+        sala_id = int(call.data.split("_")[3])
         
-        user_data[chat_id] = user_data.get(chat_id, {})
-        user_data[chat_id]["profesor_id"] = profesor_id
-        
-        # Obtener información del profesor
+        # Obtener datos de la sala y del estudiante
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Usuarios WHERE Id_usuario = ?", (profesor_id,))
-        profesor = cursor.fetchone()
         
-        # Buscar grupos de tutoría de este profesor
-        cursor.execute("""
-            SELECT * FROM Grupos_tutoria 
-            WHERE Id_usuario = ? AND Tipo_sala = 'publica'
-        """, (profesor_id,))
-        grupos = cursor.fetchall()
+        cursor.execute("SELECT * FROM Grupos_tutoria WHERE id_sala = ?", (sala_id,))
+        sala = cursor.fetchone()
+        
+        cursor.execute("SELECT * FROM Usuarios WHERE Id_usuario = ?", (estudiante_id,))
+        estudiante = cursor.fetchone()
+        
         conn.close()
         
-        if grupos:
-            # Si hay grupos disponibles, mostrar enlaces
-            mensaje = (
-                f"✅ El profesor *{profesor['Nombre']}* tiene grupos de tutoría disponibles:\n\n"
+        if not sala or not estudiante or not estudiante['TelegramID']:
+            bot.send_message(chat_id, "❌ No se pudo procesar la solicitud.")
+            bot.answer_callback_query(call.id)
+            return
+        
+        respuesta = ""
+        
+        if action == "aprobar":
+            # Proporcionar enlace al estudiante
+            respuesta = (
+                f"✅ El profesor ha *aprobado* tu solicitud de tutoría.\n\n"
+                f"Puedes unirte a la sala ahora: [Acceder a la tutoría]({sala['Enlace_invitacion']})"
             )
             
-            for grupo in grupos:
-                message_text = f"• [Grupo de tutoría]({grupo['group_link']})"
-                mensaje += message_text + "\n"
-            
-            mensaje += "\nPuedes unirte a un grupo para consultar tus dudas."
-            
-            bot.send_message(
-                chat_id,
-                mensaje,
-                parse_mode="Markdown",
-                disable_web_page_preview=True
+            # Confirmar al profesor
+            bot.edit_message_text(
+                "✅ Has aceptado la solicitud. Se ha notificado al estudiante.",
+                chat_id=chat_id,
+                message_id=call.message.message_id
             )
-        else:
-            # Si no hay grupos, ofrecer solicitar una tutoría por email
-            markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton(
-                "📝 Solicitar tutoría por email",
-                callback_data=f"solicitar_email_{profesor_id}"
-            ))
             
-            bot.send_message(
-                chat_id,
-                f"⚠️ El profesor *{profesor['Nombre']}* no tiene grupos de tutoría configurados.\n\n"
-                f"Puedes solicitar una tutoría por email.",
+        elif action == "espera":
+            # Notificar al estudiante que debe esperar
+            respuesta = (
+                f"⏳ Tu solicitud está *en espera*.\n\n"
+                f"El profesor te atenderá cuando termine con las tutorías en curso."
+                f"Recibirás otra notificación cuando sea tu turno."
+            )
+            
+            # Actualizar mensaje del profesor
+            markup = types.InlineKeyboardMarkup(row_width=2)
+            markup.add(
+                types.InlineKeyboardButton("✅ Aceptar ahora", callback_data=f"aprobar_tut_{estudiante_id}_{sala_id}"),
+                types.InlineKeyboardButton("❌ Rechazar", callback_data=f"rechazar_tut_{estudiante_id}_{sala_id}")
+            )
+            
+            bot.edit_message_text(
+                f"⏳ Has puesto en espera la solicitud de *{escape_markdown(estudiante['Nombre'])}*.\n"
+                f"Utiliza los botones cuando estés listo para atenderle.",
+                chat_id=chat_id,
+                message_id=call.message.message_id,
                 reply_markup=markup,
                 parse_mode="Markdown"
             )
+            
+        elif action == "rechazar":
+            # Notificar al estudiante del rechazo
+            respuesta = (
+                f"❌ Tu solicitud de tutoría ha sido *rechazada*.\n\n"
+                f"El profesor no puede atenderte en este momento. "
+                f"Por favor, intenta de nuevo más tarde o contacta por email."
+            )
+            
+            # Confirmar al profesor
+            bot.edit_message_text(
+                "❌ Has rechazado la solicitud. Se ha notificado al estudiante.",
+                chat_id=chat_id,
+                message_id=call.message.message_id
+            )
         
-        # Limpiar estados
-        user_states.pop(chat_id, None)
+        # Enviar respuesta al estudiante
+        bot.send_message(
+            estudiante['TelegramID'],
+            respuesta,
+            parse_mode="Markdown",
+            disable_web_page_preview=False
+        )
         
         bot.answer_callback_query(call.id)
-    
-    @bot.callback_query_handler(func=lambda call: call.data.startswith("solicitar_email_"))
-    def handle_solicitar_email(call):
-        chat_id = call.message.chat.id
-        profesor_id = int(call.data.split("_")[2])
-        
-        # Obtener información del profesor y del estudiante
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT * FROM Usuarios WHERE Id_usuario = ?", (profesor_id,))
-        profesor = cursor.fetchone()
-        
-        estudiante = get_user_by_telegram_id(call.from_user.id)
-        conn.close()
-        
-        if profesor and estudiante:
-            # Preparar plantilla de correo
-            now = datetime.datetime.now()
-            fecha_hora = now.strftime("%d/%m/%Y %H:%M")
-            
-            template = (
-                f"Asunto: Solicitud de Tutoría - {estudiante['Nombre']}\n\n"
-                f"Estimado/a {profesor['Nombre']},\n\n"
-                f"Me dirijo a usted para solicitar una tutoría. Soy {estudiante['Nombre']}, "
-                f"estudiante registrado en el sistema de tutorías de la UGR.\n\n"
-                f"Me gustaría concertar una tutoría en su horario disponible para resolver algunas dudas.\n\n"
-                f"Quedo a la espera de su respuesta.\n\n"
-                f"Atentamente,\n{estudiante['Nombre']}\n"
-                f"{estudiante['Email_UGR']}\n\n"
-                f"Mensaje generado automáticamente desde el Bot de Tutorías UGR el {fecha_hora}"
-            )
-            
-            # Mostrar la plantilla al estudiante
-            bot.send_message(
-                chat_id,
-                f"📧 *Plantilla de correo para solicitar tutoría:*\n\n"
-                f"```\n{template}\n```\n\n"
-                f"Puedes copiar este mensaje y enviarlo a: {profesor['Email_UGR']}",
-                parse_mode="Markdown"
-            )
-        
-        bot.answer_callback_query(call.id)
-    
-    def solicitar_valoracion(user_id):
-        markup = types.ReplyKeyboardMarkup(row_width=5, resize_keyboard=True)
-    
-        markup.add(
-            types.KeyboardButton("1"),
-            types.KeyboardButton("2"),
-            types.KeyboardButton("3"),
-            types.KeyboardButton("4"),
-            types.KeyboardButton("5")
-        )
-        
-        bot.send_message(
-            user_id,
-            "🌟 *Valora tu experiencia*\n\n"
-            "Del 1 al 5, siendo 5 la mejor puntuación, "
-            "¿cómo valorarías la tutoría recibida?",
-            reply_markup=markup,
-            parse_mode="Markdown"
-        )
-    
-    @bot.message_handler(commands=['crear_grupo_tutoria'])
-    def handle_crear_grupo_tutoria(message):
-        """Guía simple para crear un grupo de tutoría en Telegram"""
-        chat_id = message.chat.id
-        user = get_user_by_telegram_id(message.from_user.id)
-        
-        # Verificar si el usuario es profesor
-        if not user:
-            bot.send_message(
-                chat_id,
-                "❌ No estás registrado. Usa /start para registrarte."
-            )
-            return
-        
-        if user['Tipo'] != 'profesor':
-            bot.send_message(
-                chat_id,
-                "⚠️ Lo siento, la creación de grupos de tutoría es una función exclusiva para profesores."
-            )
-            return
-        
-        # Instrucciones simples para crear un grupo
-        texto_guia = (
-            "📝 *GUÍA RÁPIDA: CREAR GRUPO DE TUTORÍA*\n\n"
-            
-            "1️⃣ *Crear grupo en Telegram*\n"
-            "• Pulsa el icono de lápiz o '+' en Telegram\n"
-            "• Selecciona 'Nuevo grupo'\n"
-            "• Dale un nombre descriptivo (ej: 'Tutorías Programación')\n\n"
-            
-            "2️⃣ *Añadir el bot*\n"
-            "• En el grupo, pulsa '+' o 'Añadir miembro'\n"
-            "• Busca y añade @UGRTutoriasBot\n\n"
-            
-            "3️⃣ *Hacer administrador al bot*\n"
-            "• Pulsa el nombre del grupo en la parte superior\n"
-            "• Selecciona 'Administradores'\n" 
-            "• Añade al bot como administrador\n"
-            "• Activa TODOS los permisos\n\n"
-            
-            "👉 Ya puedes usar el bot en el grupo para gestionar tutorías"
-        )
-        
-        # Enviar guía
-        bot.send_message(
-            chat_id,
-            texto_guia,
-            parse_mode="Markdown"
-        )
-    
-    @bot.message_handler(func=lambda m: user_states.get(m.from_user.id, {}).get("estado") == "confirmando_valoracion")
-    def procesar_confirmacion_valoracion(message):
-        """Procesa la decisión del usuario sobre si desea valorar o no."""
-        user_id = message.from_user.id
-        opcion = message.text.strip()
-        
-        # Recuperar el estado actual
-        estado = user_states.get(user_id, {})
-        chat_pendiente = estado.get("chat_pendiente_expulsion")
-        contraparte_id = estado.get("contraparte_id")
-        
-        if opcion == "✅ Valorar tutoría":
-            # Actualizar estado para solicitar puntuación
-            user_states[user_id]["estado"] = "valorando_tutoria"
-            
-            # Enviar mensaje con botones de valoración
-            solicitar_valoracion(user_id)
-        else:
-            # El usuario decidió no valorar
-            bot.send_message(
-                user_id,
-                "✓ Gracias por usar el sistema de tutorías.",
-                reply_markup=types.ReplyKeyboardRemove()
-            )
-            
-            # Si hay expulsión pendiente, realizarla ahora
-            if chat_pendiente:
-                try:
-                    bot.send_message(
-                        chat_pendiente,
-                        f"El estudiante ha finalizado la tutoría."
-                    )
-                    bot.ban_chat_member(chat_pendiente, user_id, until_date=int(time.time() + 60))
-                except Exception as e:
-                    logger.error(f"Error expulsando al estudiante: {e}")
-            
-            # Limpiar estado
-            if user_id in user_states:
-                del user_states[user_id]
-            if user_id in estados_timestamp:
-                del estados_timestamp[user_id]

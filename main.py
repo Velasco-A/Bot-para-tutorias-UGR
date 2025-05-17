@@ -93,17 +93,25 @@ def handle_ver_misdatos(message):
         f"👤 *Datos de usuario:*\n\n"
         f"*Nombre:* {user['Nombre']}\n"
         f"*Correo:* {user['Email_UGR'] or 'No registrado'}\n"
-        f"*Tipo:* {user['Tipo'].capitalize()}\n\n"
+        f"*Tipo:* {user['Tipo'].capitalize()}\n"
     )
+    
+    # Añadir la carrera desde la tabla Usuarios
+    if 'Carrera' in user_dict and user_dict['Carrera']:
+        user_info += f"*Carrera:* {user_dict['Carrera']}\n\n"
+    else:
+        user_info += "*Carrera:* No registrada\n\n"
     
     # Añadir información de matrículas
     if matriculas and len(matriculas) > 0:
         user_info += "*Asignaturas matriculadas:*\n"
+        
+        # Agrupar asignaturas por carrera
         for m in matriculas:
             # Convertir cada matrícula a diccionario si es necesario
             m_dict = dict(m) if hasattr(m, 'keys') else m
-            carrera_nombre = m_dict.get('Carrera', 'Sin carrera asignada')
-            user_info += f"- {m_dict['Asignatura']}\n"
+            asignatura = m_dict.get('Asignatura', 'Desconocida')
+            user_info += f"- {asignatura}\n"
     else:
         user_info += "No tienes asignaturas matriculadas.\n"
     

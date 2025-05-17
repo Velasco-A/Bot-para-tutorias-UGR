@@ -48,6 +48,23 @@ if not BOT_TOKEN:
 # Inicializar el bot
 bot = telebot.TeleBot(BOT_TOKEN)
 
+# Guardar la función original
+original_send_message = bot.send_message
+
+# Reemplazar con una versión que maneja errores de Markdown
+def safe_send_message(chat_id, text, parse_mode=None, **kwargs):
+    if parse_mode == "Markdown":
+        try:
+            return original_send_message(chat_id, text, parse_mode=parse_mode, **kwargs)
+        except Exception as e:
+            logger.warning(f"Error con Markdown, reintentando sin formato: {e}")
+            return original_send_message(chat_id, text, parse_mode=None, **kwargs)
+    else:
+        return original_send_message(chat_id, text, parse_mode=parse_mode, **kwargs)
+
+# Reemplazar el método
+bot.send_message = safe_send_message
+
 # Importar funciones de la base de datos compartidas
 from db.queries import get_db_connection, get_user_by_telegram_id
 
@@ -60,7 +77,6 @@ def configurar_comandos_por_rol():
         telebot.types.BotCommand('/ayuda', 'Mostrar ayuda del bot'),
         telebot.types.BotCommand('/estudiantes', 'Ver lista de estudiantes'),
         telebot.types.BotCommand('/estadisticas', 'Ver estadísticas de tutorías'),
-        telebot.types.BotCommand('/test_simple', 'Probar funcionamiento del bot'),
     ]
     
     # Comandos para estudiantes
@@ -158,6 +174,26 @@ def actualizar_interfaz_usuario(user_id, chat_id=None):
     except Exception as e:
         logger.error(f"Error configurando interfaz para usuario {user_id}: {e}")
 
+# Menú para profesores
+def menu_profesor():
+    markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    markup.add(
+        telebot.types.KeyboardButton("📝 Ver Estudiantes"),
+        telebot.types.KeyboardButton("📊 Estadísticas"),
+        telebot.types.KeyboardButton("❌ Finalizar Tutoria"),
+        telebot.types.KeyboardButton("❓ Ayuda")
+    )
+    return markup
+
+# Menú para estudiantes
+def menu_estudiante():
+    markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    markup.add(
+        telebot.types.KeyboardButton("❌ Finalizar Tutoria"),
+        telebot.types.KeyboardButton("❓ Ayuda")
+    )
+    return markup
+
 # Iniciar hilo de limpieza periódica
 def limpieza_periodica():
     while True:
@@ -170,6 +206,14 @@ def limpieza_periodica():
 # Registrar handlers específicos
 register_grupo_handlers(bot)
 register_valoraciones_handlers(bot)
+
+# En grupos.py, añade este handler:
+@bot.message_handler(func=lambda message: message.text in ["❌ Finalizar Tutoria"])
+def handle_keyboard_finalizar(message):
+    """Maneja el botón de finalizar tutoría del teclado"""
+    # Simulamos el comando /finalizar_tutoria
+    message.text = "/finalizar_tutoria"
+    bot.process_new_messages([message])
 
 if __name__ == "__main__":
     # Verificar que existe la base de datos
