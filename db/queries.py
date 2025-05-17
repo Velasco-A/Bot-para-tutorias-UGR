@@ -83,36 +83,29 @@ def update_user(user_id, **kwargs):
     """Actualiza los datos de un usuario existente"""
     if not kwargs:
         return False
-        
-    # Asegurar que los campos existen en la tabla
-    valid_fields = ['Nombre', 'Tipo', 'Email_UGR', 'TelegramID', 'Apellidos', 'DNI', 'Carrera', 'Area', 'Registrado', 'Horario']
-    updates = {k: v for k, v in kwargs.items() if k in valid_fields}
-    
-    if not updates:
-        return False
-    
-    # Construir la consulta dinámicamente
-    query = "UPDATE Usuarios SET "
-    query += ", ".join([f"{key} = ?" for key in updates.keys()])
-    query += " WHERE Id_usuario = ?"
-    
-    conn = get_db_connection()
-    cursor = conn.cursor()
     
     try:
-        cursor.execute(query, list(updates.values()) + [user_id])
+        # Construir la consulta dinámicamente
+        query = "UPDATE Usuarios SET "
+        query += ", ".join([f"{key} = ?" for key in kwargs.keys()])
+        query += " WHERE Id_usuario = ?"
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(query, list(kwargs.values()) + [user_id])
         conn.commit()
-        return cursor.rowcount > 0
-    except Exception as e:
-        print(f"Error al actualizar usuario: {e}")
-        conn.rollback()
-        return False
-    finally:
+        success = cursor.rowcount > 0
         conn.close()
+        return success
+    except Exception as e:
+        import logging
+        logging.getLogger('db.queries').error(f"Error al actualizar usuario: {e}")
+        return False
 
 def update_horario_profesor(user_id, horario):
     """
-    Actualiza el horario de un profesor
+    Actualiza el horario de un profesor en la tabla Usuarios
     
     Args:
         user_id: ID del usuario (profesor)
@@ -125,30 +118,18 @@ def update_horario_profesor(user_id, horario):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Verificar si ya existe un registro para el profesor
+        # Actualizar directamente en la tabla Usuarios
         cursor.execute(
-            "SELECT * FROM Horarios_Profesores WHERE Id_usuario = ?", 
-            (user_id,)
+            "UPDATE Usuarios SET Horario = ? WHERE Id_usuario = ?",
+            (horario, user_id)
         )
-        existe = cursor.fetchone()
-        
-        if existe:
-            # Actualizar registro existente
-            cursor.execute(
-                "UPDATE Horarios_Profesores SET Horario = ? WHERE Id_usuario = ?",
-                (horario, user_id)
-            )
-        else:
-            # Crear nuevo registro
-            cursor.execute(
-                "INSERT INTO Horarios_Profesores (Id_usuario, Horario) VALUES (?, ?)",
-                (user_id, horario)
-            )
         
         conn.commit()
         conn.close()
         return True
     except Exception as e:
+        import logging
+        logger = logging.getLogger('db.queries')
         logger.error(f"Error al actualizar horario de profesor: {e}")
         return False
 
@@ -473,38 +454,36 @@ def obtener_profesores_por_asignaturas(asignaturas_ids):
     return profesores
 
 def get_horarios_profesor(profesor_id):
-    '''Obtiene los horarios de un profesor específico'''
+    """Obtiene el horario de un profesor desde la tabla Usuarios"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        SELECT 
-            hp.id_horario,
-            hp.dia,
-            hp.hora_inicio,
-            hp.hora_fin,
-            hp.dia || ' de ' || hp.hora_inicio || ' a ' || hp.hora_fin AS horario_formateado
-        FROM 
-            Horarios_Profesores hp
-        WHERE 
-            hp.Id_usuario = ?
-        ORDER BY 
-            CASE 
-                WHEN hp.dia = 'Lunes' THEN 1
-                WHEN hp.dia = 'Martes' THEN 2
-                WHEN hp.dia = 'Miércoles' THEN 3
-                WHEN hp.dia = 'Jueves' THEN 4
-                WHEN hp.dia = 'Viernes' THEN 5
-                ELSE 6
-            END,
-            hp.hora_inicio
-    ''', (profesor_id,))
-    
-    horarios = cursor.fetchall()
-    conn.close()
-    
-    # Convertir a lista de diccionarios
-    return [dict(zip(['id_horario', 'dia', 'hora_inicio', 'hora_fin', 'horario_formateado'], h)) for h in horarios]
+    try:
+        cursor.execute('''
+            SELECT 
+                Id_usuario,
+                Horario,
+                Horario as horario_formateado
+            FROM 
+                Usuarios
+            WHERE 
+                Id_usuario = ? AND Tipo = 'profesor'
+        ''', (profesor_id,))
+        
+        result = cursor.fetchone()
+        
+        # Si no hay resultado, devolver una lista vacía para mantener consistencia
+        if not result:
+            return []
+            
+        # Si solo hay un horario, devolver una lista con un solo elemento
+        return [result]
+    except Exception as e:
+        import logging
+        logging.getLogger('db.queries').error(f"Error al obtener horario de profesor: {e}")
+        return []
+    finally:
+        conn.close()
 
 # ===== ASIGNATURAS Y CARRERAS =====
 def get_o_crear_carrera(nombre_carrera):
