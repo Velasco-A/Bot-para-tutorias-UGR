@@ -29,69 +29,7 @@ if not logger.handlers:
     logger.setLevel(logging.INFO)
 
 def register_handlers(bot):
-    @bot.message_handler(commands=['configurar_horario'])
-    def handle_configurar_horario(message):
-        """Inicia el proceso de configuración de horario para profesores"""
-        chat_id = message.chat.id
-        user = get_user_by_telegram_id(message.from_user.id)
-        
-        if not user:
-            bot.send_message(chat_id, "❌ No estás registrado. Usa /start para registrarte.")
-            return
-            
-        if user['Tipo'] != 'profesor':
-            bot.send_message(
-                chat_id, 
-                "⚠️ Solo los profesores pueden configurar horarios de tutoría."
-            )
-            return
-        
-        # Verificar si ya tiene horario configurado
-        user_dict = dict(user)
-        horario_actual = user_dict.get('Horario', '')
-        
-        # Crear menú principal con días directamente
-        markup = types.InlineKeyboardMarkup(row_width=3)
-        dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
-        
-        buttons_dias = []
-        for dia in dias:
-            buttons_dias.append(types.InlineKeyboardButton(
-                dia, callback_data=f"dia_{dia.lower()}"
-            ))
-        
-        # Añadir botones en filas
-        markup.add(*buttons_dias[:3])  # Primera fila: Lunes, Martes, Miércoles
-        markup.add(*buttons_dias[3:])  # Segunda fila: Jueves, Viernes
-        
-        # Si ya tiene horario, añadir botón para modificar
-        if horario_actual:
-            markup.add(types.InlineKeyboardButton(
-                "✏️ Modificar horario existente", callback_data="modificar_horario"
-            ))
-        
-        # Añadir botón para confirmar
-        markup.add(types.InlineKeyboardButton(
-            "✅ Confirmar horario", callback_data="confirmar_horario"
-        ))
-        
-        # Texto del mensaje
-        if horario_actual:
-            mensaje = f"🕒 *Configuración de horario*\n\n" \
-                     f"Tu horario actual:\n{horario_actual}\n\n" \
-                     f"Selecciona un día para añadir franjas o modifica tu horario existente:"
-        else:
-            mensaje = "🕒 *Configuración de horario*\n\n" \
-                     "No tienes horario configurado. Selecciona un día para comenzar:"
-        
-        bot.send_message(
-            chat_id,
-            mensaje,
-            reply_markup=markup,
-            parse_mode="Markdown"
-        )
-        
-        user_states[chat_id] = "configurando_horario"
+    # Esta función ya está definida anteriormente
     
     def obtener_horario_actual(user_id):
         """Obtiene el horario actual del profesor desde la base de datos"""
@@ -1094,7 +1032,14 @@ def register_handlers(bot):
         # Obtener índice de la franja a eliminar
         indice = int(call.data.split("_")[2])
         
-        # Recuperar franjas guardadas
+        # Verificar que el chat_id existe en user_data
+        if chat_id not in user_data:
+            user_data[chat_id] = {}
+        
+        if 'franjas' not in user_data[chat_id]:
+            user_data[chat_id]['franjas'] = []
+        
+        # Obtener franjas de manera segura, inicializando si no existe
         franjas = user_data[chat_id].get('franjas', [])
         
         if indice >= len(franjas):
@@ -1413,7 +1358,7 @@ def register_handlers(bot):
         bot.send_message(
             chat_id,
             "👋 *Bienvenido de nuevo al menú principal*\n\n"
-            "Puedes usar los comandos del menú explicados en el comando \help.",
+            "Puedes usar los comandos del menú explicados en el comando /help.",
             parse_mode="Markdown"
         )
         

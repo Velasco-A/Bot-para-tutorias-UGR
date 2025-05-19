@@ -48,22 +48,16 @@ if not BOT_TOKEN:
 # Inicializar el bot
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# Guardar la función original
-original_send_message = bot.send_message
-
-# Reemplazar con una versión que maneja errores de Markdown
+# Crear una función wrapper que maneje errores de Markdown
 def safe_send_message(chat_id, text, parse_mode=None, **kwargs):
     if parse_mode == "Markdown":
         try:
-            return original_send_message(chat_id, text, parse_mode=parse_mode, **kwargs)
+            return bot.send_message(chat_id, text, parse_mode=parse_mode, **kwargs)
         except Exception as e:
             logger.warning(f"Error con Markdown, reintentando sin formato: {e}")
-            return original_send_message(chat_id, text, parse_mode=None, **kwargs)
+            return bot.send_message(chat_id, text, parse_mode=None, **kwargs)
     else:
-        return original_send_message(chat_id, text, parse_mode=parse_mode, **kwargs)
-
-# Reemplazar el método
-bot.send_message = safe_send_message
+        return bot.send_message(chat_id, text, parse_mode=parse_mode, **kwargs)
 
 # Importar funciones de la base de datos compartidas
 from db.queries import get_db_connection, get_user_by_telegram_id

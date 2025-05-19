@@ -363,16 +363,7 @@ def register_handlers(bot):
                 chat_id,
                 f"❌ Error al guardar la configuración.\nDetalles: {str(e)}",
                 parse_mode=None
-            )
-            
-            # O mejor, Opción 2: Escapar el mensaje de error
-            # mensaje_error = escape_markdown(str(e))
-            # bot.send_message(
-            #     chat_id,
-            #     f"❌ Error al guardar la configuración.\nDetalles: {mensaje_error}",
-            #     parse_mode="Markdown"
-            # )
-            
+            )            
             return False
     
     @bot.message_handler(func=lambda m: user_states.get(m.chat.id) == "espera_nombre_grupo")

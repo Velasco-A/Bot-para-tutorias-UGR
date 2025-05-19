@@ -23,7 +23,7 @@ from db.queries import (
 )
 
 # Añadir la función directamente en este archivo
-def escape_markdown(text):
+def escape_markdown(text: str) -> str:
     """Escapa caracteres especiales de Markdown para evitar errores de formato"""
     if not text:
         return ""
