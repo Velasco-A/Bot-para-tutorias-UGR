@@ -314,9 +314,9 @@ def handle_edit_sala(call):
         # Añadir opción para eliminar la sala
         markup.add(types.InlineKeyboardButton(
             "🗑️ Eliminar sala",
-            callback_data=f"eliminar_sala_{sala_id}"
+            callback_data=f"eliminarsala_{sala_id}"
         ))
-        print(f"  ✓ Botón eliminar con callback: eliminar_sala_{sala_id}")
+        print(f"  ✓ Botón eliminar con callback: eliminarsala_{sala_id}")
         
         # Botón para cancelar
         markup.add(types.InlineKeyboardButton(
@@ -345,6 +345,9 @@ def handle_edit_sala(call):
     
     print(f"### FIN EDIT_SALA ###\n")
     bot.answer_callback_query(call.id)
+    print("✅ Respuesta de callback enviada")
+    # imprimir call.id
+    print(f"### FIN EDIT_SALA - Callback: {call.data} ###\n")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("cambiar_proposito_"))
 def handle_cambiar_proposito(call):
@@ -812,7 +815,7 @@ def realizar_cambio_proposito(chat_id, message_id, sala_id, nuevo_proposito, use
     finally:
         conn.close()
         
-@bot.callback_query_handler(func=lambda call: call.data.startswith("eliminar_sala_"))
+@bot.callback_query_handler(func=lambda call: call.data.startswith("eliminarsala_"))
 def handle_eliminar_sala(call):
     """Solicita confirmación para eliminar una sala"""
     chat_id = call.message.chat.id
@@ -827,12 +830,12 @@ def handle_eliminar_sala(call):
         partes = call.data.split("_")
         print(f"🔍 Partes del callback: {partes}")
         
-        if len(partes) < 3:
+        if len(partes) < 2:
             print("❌ Callback con formato incorrecto")
             bot.answer_callback_query(call.id, "❌ Error: formato de callback incorrecto")
             return
             
-        sala_id = int(partes[2])
+        sala_id = int(partes[1])
         print(f"🔍 Sala ID a eliminar: {sala_id}")
         
         # Verificar usuario
@@ -1020,66 +1023,6 @@ def handle_confirmar_eliminar(call):
     
     print(f"### FIN CONFIRMAR_ELIMINAR ###\n")
 
-
-
-# Añadir esto justo antes de "if __name__ == "__main__":
-
-@bot.message_handler(commands=['eliminar_sala_id'])
-def handle_eliminar_sala_id(message):
-    """Elimina una sala directamente por su ID"""
-    chat_id = message.chat.id
-    
-    try:
-        # Verificar que se proporcionó un ID
-        args = message.text.split()
-        if len(args) < 2:
-            bot.send_message(chat_id, "Uso: /eliminar_sala_id ID_SALA\nEjemplo: /eliminar_sala_id 1")
-            return
-            
-        sala_id = int(args[1])
-        
-        # Verificar usuario
-        user = get_user_by_telegram_id(message.from_user.id)
-        if not user or user['Tipo'] != 'profesor':
-            bot.send_message(chat_id, "⚠️ Solo los profesores pueden eliminar salas")
-            return
-        
-        # Obtener información de la sala antes de eliminarla
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT Nombre_sala FROM Grupos_tutoria WHERE id_sala = ? AND Id_usuario = ?",
-            (sala_id, user['Id_usuario'])
-        )
-        sala = cursor.fetchone()
-        
-        if not sala:
-            conn.close()
-            bot.send_message(chat_id, "❌ No se encontró la sala o no tienes permisos")
-            return
-            
-        # Eliminar primero los miembros
-        cursor.execute("DELETE FROM Miembros_Grupo WHERE id_sala = ?", (sala_id,))
-        
-        # Eliminar la sala
-        cursor.execute("DELETE FROM Grupos_tutoria WHERE id_sala = ? AND Id_usuario = ?", 
-                     (sala_id, user['Id_usuario']))
-        
-        conn.commit()
-        conn.close()
-        
-        # Notificar éxito
-        bot.send_message(
-            chat_id, 
-            f"✅ La sala *{escape_markdown(sala['Nombre_sala'])}* con ID *{sala_id}* ha sido eliminada correctamente.",
-            parse_mode="Markdown"
-        )
-        
-    except ValueError:
-        bot.send_message(chat_id, "❌ El ID de la sala debe ser un número")
-    except Exception as e:
-        print(f"Error al eliminar sala por ID: {e}")
-        bot.send_message(chat_id, f"❌ Error al eliminar la sala: {str(e)}")
 
 @bot.message_handler(commands=['debug_sala'])
 def handle_debug_sala(message):
