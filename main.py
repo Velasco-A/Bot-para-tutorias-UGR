@@ -820,6 +820,9 @@ def handle_eliminar_sala(call):
     print(f"👤 Usuario: {call.from_user.id}, Chat ID: {chat_id}")
     print(f"📤 Mensaje ID: {call.message.message_id}")
     
+    # Responder al callback inmediatamente
+    bot.answer_callback_query(call.id)
+    
     try:
         partes = call.data.split("_")
         print(f"🔍 Partes del callback: {partes}")
@@ -943,14 +946,15 @@ def handle_eliminar_sala(call):
         )
     
     print(f"### FIN ELIMINAR_SALA ###\n")
-    bot.answer_callback_query(call.id)
+    
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("confirmar_eliminar_"))
 def handle_confirmar_eliminar(call):
     """Elimina definitivamente la sala después de la confirmación"""
     chat_id = call.message.chat.id
     print(f"\n\nDEBUG CONFIRMAR: Entrando en handle_confirmar_eliminar con data: {call.data}")
-    
+    print(f"👤 Usuario: {call.from_user.id}, Chat ID: {chat_id}")
+    bot.answer_callback_query(call.id)
     try:
         # Extraer IDs de la cadena de callback
         data = call.data.split("_")
@@ -958,7 +962,7 @@ def handle_confirmar_eliminar(call):
         
         if len(data) < 4:  # Verificar que tenemos suficientes partes
             print(f"DEBUG CONFIRMAR: Formato de datos incorrecto, partes: {len(data)}")
-            bot.answer_callback_query(call.id, "❌ Formato de datos incorrecto")
+            bot.send_message(chat_id, "❌ Error: formato de datos incorrecto")
             return
             
         sala_id = int(data[2])
@@ -988,8 +992,8 @@ def handle_confirmar_eliminar(call):
         nombre_sala = sala_info['Nombre_sala'] if sala_info else "desconocida"
         
         # Eliminar la sala
-        cursor.execute("DELETE FROM Grupos_tutoria WHERE id_sala = ? AND Id_usuario = ?", 
-                     (sala_id, user['Id_usuario']))
+        cursor.execute("DELETE FROM Grupos_tutoria WHERE (id_sala = ? OR Chat_id = ?) AND Id_usuario = ?", 
+                      (sala_id, telegram_chat_id, user['Id_usuario']))
         
         conn.commit()
         conn.close()
@@ -1014,10 +1018,7 @@ def handle_confirmar_eliminar(call):
         except:
             print("No se pudo enviar mensaje de error")
     
-    print(f"DEBUG CONFIRMAR: Finalizando handle_confirmar_eliminar")
-    bot.answer_callback_query(call.id)
-
-# Añade esto justo después de tus otros handlers de callback
+    print(f"### FIN CONFIRMAR_ELIMINAR ###\n")
 
 
 
@@ -1133,31 +1134,12 @@ def handle_debug_sala(message):
     except Exception as e:
         bot.send_message(chat_id, f"❌ Error: {str(e)}")
 
-
-
-
-
-
-# AÑADIR ESTE CÓDIGO al final (justo antes de if __name__ == "__main__":)
 @bot.callback_query_handler(func=lambda call: True)
-def handle_debug_all_callbacks(call):
-    """Handler universal para depurar todos los callbacks no manejados"""
-    print(f"\n\n### CALLBACK RECIBIDO: {call.data} ###")
-    print(f"👤 Usuario: {call.from_user.id}")
-    
-    # Primero comprueba si este es un callback que debería manejar otro handler
-    if any([
-        call.data.startswith("edit_sala_"),
-        call.data.startswith("cambiar_proposito_"),
-        call.data.startswith("confirmar_cambio_"),
-        call.data.startswith("ver_miembros_"),
-        call.data.startswith("cancelar_edicion_"),
-        call.data.startswith("eliminar_sala_"),
-        call.data.startswith("confirmar_eliminar_")
-    ]):
-        print(f"❌ ADVERTENCIA: Callback {call.data} llegó al handler universal pero debería tener un handler específico")
-    else:
-        print(f"ℹ️ Callback {call.data} no tiene un handler específico")
+def debug_callback_universal(call):
+    """Registra el callback y permite que otros handlers lo procesen"""
+    print(f"🔍 DEBUG: Callback recibido: {call.data}")
+    # NO llamar a bot.answer_callback_query() aquí
+    return False  # Crucial: permite que otros handlers lo procesen
 # Inicializar y ejecutar el bot
 if __name__ == "__main__":
     # Verificar que existe la base de datos
@@ -1184,3 +1166,4 @@ if __name__ == "__main__":
             traceback.print_exc()
             # Esperar antes de reconectar
             time.sleep(15)
+

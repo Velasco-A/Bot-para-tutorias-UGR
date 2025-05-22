@@ -171,18 +171,34 @@ def register_handlers(bot):
             
         # Ver horario completo
         if seleccion == "Ver horario completo":
-            # Convertir el horario actual a string y mostrarlo
-            horario_str = convertir_horario_a_string(user_data[chat_id]["horario"])
-            if horario_str:
+            # Obtener usuario directamente de la BD
+            conn = get_db_connection()
+            cursor = conn.cursor()
+    
+            cursor.execute(
+                "SELECT Horario FROM Usuarios WHERE TelegramID = ?",
+                (message.from_user.id,)
+            )
+    
+            resultado = cursor.fetchone()
+            conn.close()
+    
+            if resultado and resultado['Horario']:
+                # El horario existe en la BD
+                horario_guardado = resultado['Horario']
                 bot.send_message(
                     chat_id,
-                    f"📅 *Tu horario completo:*\n\n{formatear_horario(horario_str)}\n\n"
+                    f"📅 *Tu horario completo:*\n\n{horario_guardado}\n\n"
                     "Para modificarlo, selecciona un día específico.",
                     parse_mode="Markdown"
                 )
             else:
-                bot.send_message(chat_id, "No tienes horario configurado aún.")
-                
+                # No hay horario guardado
+                bot.send_message(
+                    chat_id, 
+                    "❓ No tienes horario configurado aún. Selecciona un día para comenzar a añadir franjas."
+                )
+    
             # Mantener en el mismo estado para seguir configurando
             return
             
@@ -191,17 +207,63 @@ def register_handlers(bot):
             # Guardar el día seleccionado
             user_data[chat_id]["dia_actual"] = seleccion
             
-            # Mostrar franjas actuales para ese día si existen
-            franjas_actuales = user_data[chat_id]["horario"].get(seleccion, [])
+            # Obtener usuario actual
+            user = get_user_by_telegram_id(message.from_user.id)
             
-            markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+            # Obtener franjas ya existentes para este día
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # Obtener el horario desde la tabla Usuarios
+            cursor.execute(
+                "SELECT Horario FROM Usuarios WHERE Id_usuario = ?", 
+                (user['Id_usuario'],)
+            )
+            resultado = cursor.fetchone()
+
+            # Procesar el horario almacenado como texto
+            horario_texto = resultado['Horario'] if resultado and resultado['Horario'] else ""
+            franjas_existentes = []
+
+            # Si hay horario, buscar las franjas del día seleccionado
+            if horario_texto:
+                # Suponiendo que el formato es "Lunes: 10:00-12:00, Martes: 16:00-18:00"
+                import re
+                
+                # Buscar el patrón del día seleccionado - MÁS ROBUSTO
+                patron = re.compile(f"{seleccion.lower()} (\\d+:\\d+-\\d+:\\d+)")
+                coincidencia = patron.search(horario_texto)
+                
+                if coincidencia:
+                    franjas_dia = coincidencia.group(1).strip()
+                    for franja in franjas_dia.split(";"):
+                        if "-" in franja:
+                            inicio, fin = franja.split("-")
+                            franjas_existentes.append({
+                                'dia': seleccion,
+                                'hora_inicio': inicio.strip(),
+                                'hora_fin': fin.strip(),
+                                'lugar': "No especificado"
+                            })
             
-            if franjas_actuales:
-                mensaje = f"🕒 *Franjas horarias para {seleccion}:*\n\n"
-                for i, franja in enumerate(franjas_actuales, 1):
-                    mensaje += f"{i}. {franja}\n"
+            conn.close()
+
+            if franjas_existentes and len(franjas_existentes) > 0:
+                # Hay franjas para este día
+                mensaje = f"📅 *Franjas horarias para {seleccion}:*\n\n"
+                
+                for i, franja in enumerate(franjas_existentes, 1):
+                    # Formatear la hora para mejor visualización
+                    inicio = franja['hora_inicio']
+                    fin = franja['hora_fin']
+                    lugar = franja['lugar'] or "No especificado"
                     
+                    mensaje += f"{i}. De *{inicio}* a *{fin}*\n   📍 {lugar}\n\n"
+                
+                mensaje += "Selecciona una opción:"
+                
                 # Opciones para modificar, añadir o eliminar
+                markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
                 markup.add(
                     telebot.types.KeyboardButton("➕ Añadir nueva franja"),
                     telebot.types.KeyboardButton("✏️ Modificar franja existente"),
@@ -217,7 +279,9 @@ def register_handlers(bot):
                     reply_markup=markup
                 )
             else:
-                mensaje = f"No hay franjas configuradas para {seleccion}."
+                # No hay franjas para este día
+                mensaje = f"📅 *{seleccion}*\n\nNo tienes franjas horarias configuradas para este día."
+                markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
                 markup.add(
                     telebot.types.KeyboardButton("➕ Añadir franja horaria"),
                     telebot.types.KeyboardButton("🔙 Volver")
