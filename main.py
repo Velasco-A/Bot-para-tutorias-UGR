@@ -1083,6 +1083,8 @@ def debug_callback_universal(call):
     print(f"🔍 DEBUG: Callback recibido: {call.data}")
     # NO llamar a bot.answer_callback_query() aquí
     return False  # Crucial: permite que otros handlers lo procesen
+
+
 # Inicializar y ejecutar el bot
 if __name__ == "__main__":
     # Verificar que existe la base de datos
@@ -1109,4 +1111,49 @@ if __name__ == "__main__":
             traceback.print_exc()
             # Esperar antes de reconectar
             time.sleep(15)
+
+# Esta función debe ser llamada al finalizar el registro
+def enviar_mensaje_bienvenida(chat_id, tipo_usuario):
+    """Envía un mensaje de bienvenida personalizado según el tipo de usuario"""
+    if tipo_usuario == 'profesor':
+        mensaje = (
+            "🎓 *¡Bienvenido al Sistema de Tutorías UGR, Profesor!*\n\n"
+            "Ahora puedes gestionar tus tutorías de forma eficiente. Estas son tus principales funciones:\n\n"
+            "📅 *Configurar horario de tutorías*\n"
+            "Comando: /configurar_horario\n"
+            "Te permite establecer las franjas horarias en las que atenderás tutorías.\n\n"
+            "👥 *Crear grupos de tutoría*\n"
+            "Comando: /crear_grupo_tutoria\n"
+            "Crea salas de tutoría para tus asignaturas, ya sea para tutorías individuales, grupales o avisos.\n\n"
+            "📋 *Ver tus datos y grupos*\n"
+            "Comando: /ver_misdatos\n"
+            "Consulta tu información registrada y gestiona tus salas de tutoría.\n\n"
+            "🔍 *Ayuda detallada*\n"
+            "Comando: /help\n"
+            "Muestra todos los comandos disponibles con explicaciones.\n\n"
+            "Tu próximo paso recomendado es configurar tu horario de tutorías usando /configurar_horario"
+        )
+    else:  # estudiante
+        mensaje = (
+            "🎓 *¡Bienvenido al Sistema de Tutorías UGR, Estudiante!*\n\n"
+            "Ahora puedes gestionar tus tutorías de forma eficiente. Estas son tus principales funciones:\n\n"
+            "👨‍🏫 *Solicitar tutorías*\n"
+            "Comando: /tutoria\n"
+            "Te muestra los profesores disponibles para tus asignaturas y te permite solicitar tutorías.\n\n"
+            "📋 *Ver tus datos*\n"
+            "Comando: /ver_misdatos\n"
+            "Consulta tu información registrada y asignaturas matriculadas.\n\n"
+            "🔍 *Ayuda detallada*\n"
+            "Comando: /help\n"
+            "Muestra todos los comandos disponibles con explicaciones.\n\n"
+            "Tu próximo paso recomendado es explorar tus profesores disponibles usando /tutoria"
+        )
+    
+    try:
+        # Enviar mensaje con formato markdown
+        bot.send_message(chat_id, mensaje, parse_mode="Markdown")
+    except Exception as e:
+        # Si falla el formateo, enviar sin formato
+        print(f"Error al enviar mensaje de bienvenida: {e}")
+        bot.send_message(chat_id, mensaje.replace('*', ''), parse_mode=None)
 

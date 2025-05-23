@@ -18,3 +18,9 @@
 2025-05-17 13:06:47,243 [WARNING] Error con Markdown, reintentando sin formato: A request to the Telegram API was unsuccessful. Error code: 400. Description: Bad Request: can't parse entities: Can't find end of the entity starting at byte offset 151
 2025-05-17 13:33:32,261 [INFO] Usuario 6437090930 (Alberto) ha iniciado el bot en chat 6437090930
 2025-05-17 13:33:32,508 [INFO] Interfaz de profesor configurada para usuario 6437090930
+2025-05-23 08:32:51,508 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-23 08:32:51,508 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-23 08:32:51,757 [INFO] Bot de Grupos iniciado
+2025-05-23 08:49:13,457 [INFO] Usuario 226787756 (Gabriel) ha iniciado el bot en chat -1002509488776
+2025-05-23 08:49:13,702 [INFO] Interfaz de profesor configurada para usuario 226787756
+2025-05-23 11:16:30,677 [ERROR] Error en polling: ('Connection aborted.', ConnectionResetError(10054, 'Se ha forzado la interrupción de una conexión existente por el host remoto', None, 10054, None))

@@ -130,6 +130,15 @@ def register_handlers(bot):
         """Verifica si el correo es válido (institucional UGR)"""
         return re.match(r'.+@(correo\.)?ugr\.es$', email) is not None
     
+    def verificar_correo_en_bd(email):
+        """Verifica si el correo existe en la tabla Usuarios de la base de datos"""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT Id_usuario FROM Usuarios WHERE Email_UGR = ?", (email,))
+        resultado = cursor.fetchone()
+        conn.close()
+        return resultado is not None
+    
     def is_email_registered(email):
         """Verifica si el correo ya está registrado en la base de datos"""
         # Implementar según tu estructura de base de datos
@@ -275,6 +284,7 @@ def register_handlers(bot):
         # Validar el email
         email = text.lower()
         
+        # 1. Verificar formato del correo
         if not is_valid_email(email):
             bot.send_message(
                 chat_id, 
@@ -283,6 +293,18 @@ def register_handlers(bot):
             )
             return
         
+        # 2. Verificar si el correo existe en la tabla Usuarios
+        if not verificar_correo_en_bd(email):
+            bot.send_message(
+                chat_id, 
+                "❌ *Correo no encontrado*\n\n"
+                "El correo introducido no está registrado en el sistema.\n"
+                "Solo pueden acceder usuarios previamente registrados en la base de datos.",
+                parse_mode="Markdown"
+            )
+            return
+        
+        # 3. Verificar si el correo ya está registrado con un Telegram ID
         if is_email_registered(email):
             bot.send_message(
                 chat_id, 
@@ -304,7 +326,7 @@ def register_handlers(bot):
         es_estudiante = email.endswith("@correo.ugr.es")
         user_data[chat_id]["tipo"] = "estudiante" if es_estudiante else "profesor"
         
-        # Simular envío de token
+        # Enviar token de verificación
         if send_verification_email(email, token):
             # Botón para cancelar
             markup = types.InlineKeyboardMarkup()
@@ -320,7 +342,7 @@ def register_handlers(bot):
                 parse_mode="Markdown",
                 reply_markup=markup
             )
-            user_states[chat_id] = STATE_VERIFY_TOKEN  # En lugar de "ESPERANDO_TOKEN"
+            user_states[chat_id] = STATE_VERIFY_TOKEN
             estados_timestamp[chat_id] = time.time()
         else:
             bot.send_message(
