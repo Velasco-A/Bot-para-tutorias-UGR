@@ -54,6 +54,19 @@ if not logger.handlers:
 def register_handlers(bot):
     """Registra todos los handlers del proceso de registro"""
     
+    def handle_registration_completion(chat_id, tipo_usuario):
+        """Envía mensaje de bienvenida según tipo de usuario"""
+        try:
+            # Importar aquí para evitar importación circular
+            from main import enviar_mensaje_bienvenida
+            enviar_mensaje_bienvenida(chat_id, tipo_usuario)
+        except Exception as e:
+            logger.error(f"Error al enviar mensaje de bienvenida: {e}")
+            bot.send_message(
+                chat_id, 
+                "¡Bienvenido al sistema de tutorías! Usa /help para ver los comandos disponibles."
+            )
+    
     def reset_user(chat_id):
         """Reinicia el estado y datos del usuario"""
         clear_state(chat_id)
@@ -186,8 +199,12 @@ def register_handlers(bot):
                                   (carrera_id, asignatura_id))
                     cursor.connection.commit()
                     cursor.connection.close()
-                    
-            # Resto del código de completar_registro...
+        
+            # Llamar a la función para enviar mensaje de bienvenida
+            tipo = user_data[chat_id]['tipo']
+            handle_registration_completion(chat_id, tipo)
+            
+            return True
         except Exception as e:
             logger.error(f"Error al completar registro: {e}")
             bot.send_message(chat_id, "❌ Error al completar el registro. Por favor, intenta de nuevo con /start.")
@@ -413,11 +430,12 @@ def register_handlers(bot):
             else:
                 bot.send_message(chat_id, "❌ Código incorrecto. Inténtalo de nuevo o cancela con /cancelar")
                 return
-        
+    
         if es_valido:
             try:
                 # Obtener el correo asociado con este chat_id
                 email = user_data[chat_id].get("email")
+                tipo_usuario = user_data[chat_id].get("tipo", "estudiante")
                 
                 if email:
                     # Actualizar la base de datos: cambiar Registrado a SI y guardar el TelegramID
@@ -436,18 +454,21 @@ def register_handlers(bot):
                         conn.commit()
                         logger.info(f"Usuario {email} verificado correctamente. TelegramID actualizado.")
                         
+                        # Enviar mensaje de bienvenida
+                        handle_registration_completion(chat_id, tipo_usuario)
+                        
                     conn.close()
                 else:
                     logger.error("No se encontró email en user_data para la verificación")
             except Exception as e:
                 logger.error(f"Error al actualizar registro en BD: {e}")
-            
-            # Confirmar al usuario y cambiar estado
-            bot.send_message(message.chat.id, "✅ Verificación exitosa!")
-            clear_state(message.chat.id)  # Limpiar estado
-            
-            # Mostrar menú principal o siguiente paso
-            mostrar_menu_principal(message)
+        
+        # Confirmar al usuario y cambiar estado
+        bot.send_message(message.chat.id, "✅ Verificación exitosa!")
+        clear_state(message.chat.id)  # Limpiar estado
+        
+        # Mostrar menú principal o siguiente paso
+        mostrar_menu_principal(message)
 
     @bot.callback_query_handler(func=lambda call: call.data == "cancelar_registro")
     def handle_cancelar_registro(call):
@@ -462,106 +483,36 @@ def register_handlers(bot):
         clear_state(chat_id)
         bot.answer_callback_query(call.id)
 
-    @bot.callback_query_handler(func=lambda call: user_states.get(call.message.chat.id) == STATE_CONFIRMAR_DATOS and call.data == "confirmar_datos_excel")
-    def handle_confirmar_datos_excel(call):
-        """Completa el registro con los datos del Excel"""
-        chat_id = call.message.chat.id
-        telegram_id = call.from_user.id
+        if user_data[chat_id]["tipo"] == "estudiante":
+            mensaje = (
+                f"📚 *Comandos disponibles:*\n"
+                f"• /help - Ver todos los comandos disponibles\n"
+                f"• /profesores - Ver profesores de tus asignaturas\n"
+                f"• /horarios - Ver horarios de tutorías"
+            )
+        else:  # Si es profesor
+            mensaje = (
+                f"🔔 *Tu próximo paso:*\n"
+                f"Debes configurar tu horario de tutorías y crear grupos para tus asignaturas.\n\n"
+                f"📚 *Comandos disponibles:*\n"
+                f"• /configurar_horario - Establecer tu horario de tutorías\n"
+                f"• /crear_grupo_tutoria - Crear grupos para tus asignaturas\n"
+                f"• /help - Ver todos los comandos disponibles"
+            )
         
+        bot.send_message(
+            chat_id,
+            mensaje,
+            parse_mode="Markdown"
+        )
+        
+        # Enviar mensaje de bienvenida personalizado
         try:
-            completar_registro(chat_id)
-            
-            # Mensaje final según tipo de usuario
-            tipo_usuario = "estudiante" if user_data[chat_id]["tipo"] == "estudiante" else "profesor"
-            nombre = f"{user_data[chat_id]['nombre']} {user_data[chat_id]['apellidos']}"
-            asignaturas = ", ".join(user_data[chat_id]["asignaturas"])
-            
-            bot.send_message(
-                chat_id,
-                f"✅ *¡Registro completado correctamente!*\n\n"
-                f"Te has registrado como {tipo_usuario}.\n\n"
-                f"*Nombre:* {nombre}\n"
-                f"*Email:* {user_data[chat_id]['email']}\n"
-                f"*Asignaturas:* {asignaturas}",
-                parse_mode="Markdown"
-            )
-            
-            if user_data[chat_id]["tipo"] == "estudiante":
-                mensaje = (
-                    f"📚 *Comandos disponibles:*\n"
-                    f"• /help - Ver todos los comandos disponibles\n"
-                    f"• /profesores - Ver profesores de tus asignaturas\n"
-                    f"• /horarios - Ver horarios de tutorías"
-                )
-            else:  # Si es profesor
-                mensaje = (
-                    f"🔔 *Tu próximo paso:*\n"
-                    f"Debes crear un grupo de tutoría para cada asignatura que impartes.\n"
-                    f"Utiliza el comando /crear_grupo para configurar tus grupos.\n\n"
-                    f"📚 *Otros comandos disponibles:*\n"
-                    f"• /help - Ver todos los comandos disponibles\n"
-                    f"• /configurar_horario - Modificar tu horario de tutorías\n"
-                    f"• /mis_tutorias - Ver tus grupos de tutoría activos"
-                )
-            
-            bot.send_message(
-                chat_id,
-                mensaje,
-                parse_mode="Markdown",
-                reply_markup=telebot.types.ReplyKeyboardRemove()
-            )
-            
-            # Limpiar estados
-            clear_state(chat_id)
-            logger.info(f"Usuario registrado desde Excel: {user_data[chat_id]['nombre']} {user_data[chat_id]['apellidos']} ({telegram_id})")
-            
+            from main import enviar_mensaje_bienvenida
+            enviar_mensaje_bienvenida(chat_id, user_data[chat_id]["tipo"])
         except Exception as e:
-            logger.error(f"Error al registrar usuario desde Excel: {str(e)}")
+            logger.error(f"Error al enviar mensaje de bienvenida: {e}")
             
-            bot.send_message(
-                chat_id,
-                f"❌ Error al completar el registro: {str(e)}\n"
-                f"Por favor, contacta con soporte.",
-                parse_mode="Markdown"
-            )
-            clear_state(chat_id)
-        
-        bot.answer_callback_query(call.id)
-
-    # Comando para recargar datos del Excel (solo para administradores)
-    @bot.message_handler(commands=["reload_excel"])
-    def handle_reload_excel(message):
-        """Recarga los datos del Excel (solo para admins)"""
-        chat_id = message.chat.id
-        user_id = message.from_user.id
-        
-        # Lista de administradores (puedes moverla a una configuración)
-        admin_ids = [123456789]  # Reemplaza con tu ID de Telegram
-        
-        if user_id not in admin_ids:
-            bot.reply_to(message, "❌ No tienes permisos para ejecutar este comando.")
-            return
-        
-        # Intentar recargar el Excel
-        success = cargar_excel()
-        
-        if success:
-            bot.reply_to(message, "✅ Datos de Excel recargados correctamente.")
-        else:
-            bot.reply_to(message, "❌ Error al recargar los datos del Excel. Revisa los logs.")
-
-    # Manejador para cancelar registro con comando
-    @bot.message_handler(commands=["cancelar"])
-    def handle_cancelar_command(message):
-        """Cancela el registro en curso"""
-        chat_id = message.chat.id
-        
-        if chat_id in user_states:
-            bot.send_message(
-                chat_id, 
-                "Registro cancelado. Puedes iniciarlo nuevamente con /start cuando lo desees.",
-                reply_markup=telebot.types.ReplyKeyboardRemove()
-            )
-            clear_state(chat_id)
-        else:
-            bot.send_message(chat_id, "No hay ningún registro en curso para cancelar.")
+        # Limpiar estado para terminar el registro
+        clear_state(chat_id)
+        bot.answer_callback_query(call.id, "✅ Registro completado")
