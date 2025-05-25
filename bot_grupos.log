@@ -24,3 +24,123 @@
 2025-05-23 08:49:13,457 [INFO] Usuario 226787756 (Gabriel) ha iniciado el bot en chat -1002509488776
 2025-05-23 08:49:13,702 [INFO] Interfaz de profesor configurada para usuario 226787756
 2025-05-23 11:16:30,677 [ERROR] Error en polling: ('Connection aborted.', ConnectionResetError(10054, 'Se ha forzado la interrupción de una conexión existente por el host remoto', None, 10054, None))
+2025-05-24 10:18:56,403 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 10:18:56,404 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 10:18:56,658 [INFO] Bot de Grupos iniciado
+2025-05-24 10:25:59,447 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 10:25:59,447 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 10:25:59,706 [INFO] Bot de Grupos iniciado
+2025-05-24 10:26:29,187 [INFO] Usuario 6437090930 (Alberto) ha iniciado el bot en chat 6437090930
+2025-05-24 10:26:29,420 [INFO] Interfaz de profesor configurada para usuario 6437090930
+2025-05-24 10:32:30,338 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 10:32:30,338 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 10:32:30,609 [INFO] Bot de Grupos iniciado
+2025-05-24 10:32:55,910 [INFO] Usuario 6437090930 (Alberto) ha iniciado el bot en chat -4890251705
+2025-05-24 10:32:56,093 [INFO] Interfaz de profesor configurada para usuario 6437090930
+2025-05-24 10:41:44,615 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 10:41:44,615 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 10:41:45,184 [INFO] Bot de Grupos iniciado
+2025-05-24 10:43:30,550 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 10:43:30,550 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 10:43:30,892 [INFO] Bot de Grupos iniciado
+2025-05-24 10:47:53,661 [ERROR] Error en configurar_grupo_comando: no such table: profesor_asignatura
+2025-05-24 10:54:30,001 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 10:54:30,001 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 10:54:30,309 [INFO] Bot de Grupos iniciado
+2025-05-24 11:01:04,283 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 11:01:04,283 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 11:01:04,653 [INFO] Bot de Grupos iniciado
+2025-05-24 11:01:25,456 [INFO] Mensaje de ayuda enviado a -4688012722
+2025-05-24 11:01:30,079 [INFO] Usuario 6437090930 (Alberto) ha iniciado el bot en chat -4688012722
+2025-05-24 11:01:30,270 [INFO] Interfaz de profesor configurada para usuario 6437090930
+2025-05-24 11:04:09,170 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 11:04:09,170 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 11:04:09,658 [INFO] Bot de Grupos iniciado
+2025-05-24 11:04:12,401 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 11:04:12,402 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 11:04:12,705 [INFO] Bot de Grupos iniciado
+2025-05-24 11:04:14,385 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 11:04:14,386 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 11:04:14,720 [INFO] Bot de Grupos iniciado
+2025-05-24 11:04:16,843 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 11:04:16,843 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 11:04:17,141 [INFO] Bot de Grupos iniciado
+2025-05-24 11:04:25,155 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 11:04:25,156 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 11:04:25,503 [INFO] Bot de Grupos iniciado
+2025-05-24 11:04:33,281 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 11:04:33,281 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 11:04:33,586 [INFO] Bot de Grupos iniciado
+2025-05-24 11:05:44,283 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-24 11:05:44,283 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-24 11:05:44,575 [INFO] Bot de Grupos iniciado
+2025-05-25 00:01:35,172 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 00:01:35,173 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 00:01:35,442 [INFO] Bot de Grupos iniciado
+2025-05-25 00:06:29,858 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 00:06:29,858 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 00:06:30,166 [INFO] Bot de Grupos iniciado
+2025-05-25 00:07:31,640 [ERROR] Error en handle_config_grupo: table Grupos_tutoria has no column named Enlace
+2025-05-25 00:25:21,818 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 00:25:21,818 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 00:25:22,298 [INFO] Bot de Grupos iniciado
+2025-05-25 00:28:43,220 [ERROR] Error en handle_config_grupo: UNIQUE constraint failed: Grupos_tutoria.Chat_id
+2025-05-25 01:08:02,944 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 01:08:02,944 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 01:08:03,425 [INFO] Bot de Grupos iniciado
+2025-05-25 01:16:54,229 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 01:16:54,230 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 01:16:54,746 [INFO] Bot de Grupos iniciado
+2025-05-25 01:17:38,499 [ERROR] Error en polling: no such table: Profesores_Asignaturas
+2025-05-25 01:21:43,969 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 01:21:43,970 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 01:21:44,395 [INFO] Bot de Grupos iniciado
+2025-05-25 01:22:29,475 [ERROR] Error configurando grupo -1002658035072: no such column: ID
+2025-05-25 01:27:35,517 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 01:27:35,518 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 01:27:35,918 [INFO] Bot de Grupos iniciado
+2025-05-25 01:28:25,313 [ERROR] Error configurando grupo -1002639067285: no such column: ID
+2025-05-25 01:37:46,059 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 01:37:46,060 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 01:37:46,502 [INFO] Bot de Grupos iniciado
+2025-05-25 01:38:28,501 [ERROR] Error configurando grupo -1002596459552: no such column: ID
+2025-05-25 17:13:33,658 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 17:13:33,658 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 17:13:33,922 [INFO] Bot de Grupos iniciado
+2025-05-25 17:14:11,461 [ERROR] Error configurando grupo -1002620916679: no such column: ID
+2025-05-25 17:21:47,963 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 17:21:47,963 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 17:21:48,241 [INFO] Bot de Grupos iniciado
+2025-05-25 17:23:13,746 [ERROR] Error configurando grupo -1002513674302: table Grupos_tutoria has no column named ID_Profesor
+2025-05-25 17:29:52,373 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 17:29:52,373 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 17:29:52,662 [INFO] Bot de Grupos iniciado
+2025-05-25 17:30:22,828 [ERROR] Error configurando grupo -1002677459841: table Grupos_tutoria has no column named ID_Profesor
+2025-05-25 17:35:01,501 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 17:35:01,502 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 17:35:01,834 [INFO] Bot de Grupos iniciado
+2025-05-25 17:37:21,024 [ERROR] Error configurando grupo -1002644089595: table Grupos_tutoria has no column named ID_Profesor
+2025-05-25 17:42:11,334 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 17:42:11,334 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 17:42:11,696 [INFO] Bot de Grupos iniciado
+2025-05-25 17:42:42,270 [ERROR] Error configurando grupo -1002198005561: table Grupos_tutoria has no column named ID_Profesor
+2025-05-25 17:44:52,826 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 17:44:52,826 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 17:44:53,155 [INFO] Bot de Grupos iniciado
+2025-05-25 17:56:26,781 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 17:56:26,781 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 17:56:27,073 [INFO] Bot de Grupos iniciado
+2025-05-25 19:15:12,175 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 19:15:12,176 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 19:15:12,602 [INFO] Bot de Grupos iniciado
+2025-05-25 19:20:11,091 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 19:20:11,092 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 19:20:13,013 [INFO] Bot de Grupos iniciado
+2025-05-25 19:27:05,953 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 19:27:05,953 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 19:27:06,425 [INFO] Bot de Grupos iniciado
+2025-05-25 19:27:13,132 [ERROR] Error en la selección de asignatura -1002562694396: CHECK constraint failed: Tipo_sala IN ('privada', 'pública')
+2025-05-25 19:32:11,365 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-25 19:32:11,366 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-25 19:32:11,729 [INFO] Bot de Grupos iniciado
+2025-05-25 23:02:29,320 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)

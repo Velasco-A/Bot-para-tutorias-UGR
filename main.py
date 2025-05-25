@@ -286,14 +286,13 @@ def handle_edit_sala(call):
         
         print(f"✅ Sala encontrada: {sala['Nombre_sala']} (Chat ID: {sala['Chat_id']})")
         
-        # Mostrar opciones de edición
+        # Mostrar opciones de edición (simplificadas)
         print("🔘 Generando botones de opciones...")
         markup = types.InlineKeyboardMarkup(row_width=1)
         
-        # Diccionario de propósitos con emojis
+        # Diccionario de propósitos con emojis (solo avisos e individual)
         propositos = {
             'individual': '👨‍🏫 Tutorías individuales',
-            'grupal': '👥 Tutorías grupales',
             'avisos': '📢 Canal de avisos'
         }
         
@@ -346,7 +345,6 @@ def handle_edit_sala(call):
     print(f"### FIN EDIT_SALA ###\n")
     bot.answer_callback_query(call.id)
     print("✅ Respuesta de callback enviada")
-    # imprimir call.id
     print(f"### FIN EDIT_SALA - Callback: {call.data} ###\n")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("cambiar_proposito_"))
@@ -715,10 +713,9 @@ def notificar_cambio_sala(sala_id, nuevo_proposito):
     miembros = cursor.fetchall()
     conn.close()
     
-    # Textos para los propósitos
+    # Textos para los propósitos (simplificado)
     propositos = {
         'individual': 'Tutorías individuales',
-        'grupal': 'Tutorías grupales',
         'avisos': 'Canal de avisos'
     }
     
@@ -727,10 +724,6 @@ def notificar_cambio_sala(sala_id, nuevo_proposito):
         'individual': (
             "Ahora la sala requiere aprobación del profesor para cada solicitud "
             "y solo está disponible durante su horario de tutorías."
-        ),
-        'grupal': (
-            "Ahora la sala está diseñada para sesiones grupales donde "
-            "varios estudiantes pueden participar simultáneamente."
         ),
         'avisos': (
             "Ahora la sala funciona como canal informativo donde "
@@ -1077,12 +1070,315 @@ def handle_debug_sala(message):
     except Exception as e:
         bot.send_message(chat_id, f"❌ Error: {str(e)}")
 
+
+
+@bot.message_handler(commands=['crear_grupo_tutoria'])
+def crear_grupo(message):
+    """Proporciona instrucciones para crear un grupo de tutoría en Telegram"""
+    chat_id = message.chat.id
+    user = get_user_by_telegram_id(message.from_user.id)
+    
+    # Verificar que el usuario es profesor
+    if not user or user['Tipo'] != 'profesor':
+        bot.send_message(
+            chat_id,
+            "❌ Solo los profesores pueden crear grupos de tutoría."
+        )
+        return
+    
+    # Instrucciones sin formato especial (sin asteriscos ni caracteres problemáticos)
+    instrucciones = (
+        "🎓 Cómo crear un grupo de tutoría\n\n"
+        "Siga estos pasos para crear un grupo de tutoría efectivo:\n\n"
+        
+        "1️⃣ Crear un grupo nuevo en Telegram\n"
+        "• Pulse el botón de nueva conversación\n"
+        "• Seleccione 'Nuevo grupo'\n\n"
+        
+        "2️⃣ Añadir el bot al grupo\n"
+        "• Pulse el nombre del grupo\n"
+        "• Seleccione 'Administradores'\n"
+        "• Añada a @UGRTutoriasBot como administrador\n"
+        "• Active todos los permisos\n\n"
+        
+        "3️⃣ Configurar el grupo\n"
+        "• En el grupo, escriba /configurar_grupo\n"
+        "• Siga las instrucciones para vincular la sala\n"
+        "• Configure el tipo de tutoría\n\n"
+        
+        "📌 Recomendaciones para el nombre del grupo\n"
+        "• 'Tutorías [Asignatura] - [Su Nombre]'\n"
+        "• 'Avisos [Asignatura] - [Año Académico]'\n\n"
+        
+        "🔔 Una vez registrada la sala podrá\n"
+        "• Gestionar solicitudes de tutoría\n"
+        "• Programar sesiones grupales\n"
+        "• Enviar avisos automáticos\n"
+        "• Ver estadísticas de participación"
+    )
+    
+    # Crear botones útiles con callback data simplificados
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton(
+            "📝 Ver mis salas actuales", 
+            callback_data="ver_salas"  # Simplificado
+        ),
+        types.InlineKeyboardButton(
+            "❓ Preguntas frecuentes",
+            callback_data="faq_grupo"  # Simplificado
+        )
+    )
+    
+    # Enviar mensaje SIN formato markdown para evitar errores
+    try:
+        bot.send_message(
+            chat_id,
+            instrucciones,
+            reply_markup=markup
+        )
+    except Exception as e:
+        print(f"Error al enviar instrucciones de creación de grupo: {e}")
+        bot.send_message(
+            chat_id,
+            "Para crear un grupo de tutoría: 1) Cree un grupo, 2) Añada al bot como administrador, "
+            "3) Use /configurar_grupo en el grupo.",
+            reply_markup=markup
+        )
+
+
+# Handlers para los botones simplificados
+@bot.callback_query_handler(func=lambda call: call.data == "ver_salas")
+def handler_ver_salas(call):
+    """Muestra las salas actuales del usuario"""
+    chat_id = call.message.chat.id
+    user_id = call.from_user.id
+    
+    # Depuración adicional
+    print(f"\n\n### INICIO VER_SALAS CALLBACK ###")
+    print(f"🔍 Callback data: {call.data}")
+    print(f"👤 User ID: {user_id}, Chat ID: {chat_id}")
+    print(f"📝 Message ID: {call.message.message_id}")
+    
+    # Responder al callback inmediatamente para evitar el error de "query is too old"
+    try:
+        bot.answer_callback_query(call.id)
+        print("✅ Callback respondido correctamente")
+    except Exception as e:
+        print(f"❌ Error al responder al callback: {e}")
+    
+    # Solución para evitar crear un mensaje simulado
+    try:
+        print("🔄 Llamando directamente a handle_ver_misdatos...")
+        
+        # En lugar de crear un mensaje simulado, llamamos directamente a la función
+        # y proporcionamos los datos mínimos necesarios
+        mensaje_directo = {
+            'chat': {'id': chat_id},
+            'from_user': {'id': user_id},
+            'text': '/ver_misdatos'
+        }
+        
+        # Creamos una versión simplificada del mensaje
+        class SimpleMessage:
+            def __init__(self, chat_id, user_id, text):
+                self.chat = types.Chat(chat_id, 'private')
+                self.from_user = types.User(user_id, False, 'Usuario')
+                self.text = text
+        
+        # Crear el mensaje simplificado
+        msg = SimpleMessage(chat_id, user_id, '/ver_misdatos')
+        
+        # Llamar directamente a la función de manejo
+        handle_ver_misdatos(msg)
+        print("✅ handle_ver_misdatos llamado con éxito")
+    except Exception as e:
+        print(f"❌ Error al llamar a handle_ver_misdatos: {str(e)}")
+        import traceback
+        print("📋 Traza de error completa:")
+        traceback.print_exc()
+        bot.send_message(chat_id, "❌ Error al mostrar tus salas. Intenta usar /ver_misdatos directamente.")
+    
+    print("### FIN VER_SALAS CALLBACK ###\n\n")
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "faq_grupo")
+def handler_faq_grupo(call):
+    """Muestra preguntas frecuentes sobre creación de grupos"""
+    chat_id = call.message.chat.id
+    message_id = call.message.message_id
+    
+    # Depuración adicional
+    print(f"\n\n### INICIO FAQ_GRUPO CALLBACK ###")
+    print(f"🔍 Callback data: {call.data}")
+    print(f"👤 User ID: {call.from_user.id}, Chat ID: {chat_id}")
+    print(f"📝 Message ID: {message_id}")
+    
+    # Responder al callback inmediatamente
+    try:
+        bot.answer_callback_query(call.id)
+        print("✅ Callback respondido correctamente")
+    except Exception as e:
+        print(f"❌ Error al responder al callback: {e}")
+    
+    # FAQ sin formato Markdown para evitar problemas de formato
+    faq = (
+        "❓ Preguntas frecuentes sobre grupos de tutoría\n\n"
+        
+        "¿Puedo crear varios grupos para la misma asignatura?\n"
+        "No, solamente un grupo para avisos por asignatura y despues una sala unica para tutorias individuales.\n\n"
+        
+        "¿Es necesario hacer administrador al bot?\n"
+        "Sí, el bot necesita permisos administrativos para poder gestioanr el grupo.\n\n"
+        
+        "¿Quién puede acceder al grupo?\n"
+        "Depende del tipo: los de avisos acceden todos los matriculados en la asignatura, los de tutoría individual requieren aprobación por parte del profeser siempre y cuando se encuentre en horario de tutorias.\n\n"
+        
+        "¿Puedo cambiar el tipo de grupo después?\n"
+        "Sí, use /ver_misdatos y seleccione la sala para modificar su propósito.\n\n"
+        
+        "¿Cómo eliminar un grupo?\n"
+        "Use /ver_misdatos, seleccione la sala y elija la opción de eliminar.\n\n"
+        
+        "¿Los estudiantes pueden crear grupos?\n"
+        "No, solo los profesores pueden crear grupos de tutoría oficiales."
+    )
+    
+    # Botón para volver a las instrucciones
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(types.InlineKeyboardButton("🔙 Volver", callback_data="volver_instrucciones"))
+    print("✅ Markup de botones creado")
+    
+    try:
+        print("🔄 Intentando editar el mensaje actual...")
+        # Intentar editar el mensaje actual
+        bot.edit_message_text(
+            text=faq,
+            chat_id=chat_id,
+            message_id=message_id,
+            reply_markup=markup
+        )
+        print("✅ FAQ enviado con éxito (mensaje editado)")
+    except Exception as e:
+        print(f"❌ Error al editar mensaje para FAQ: {e}")
+        import traceback
+        print("📋 Traza de error completa:")
+        traceback.print_exc()
+        
+        # En caso de error, enviar como mensaje nuevo
+        try:
+            print("🔄 Intentando enviar como mensaje nuevo...")
+            bot.send_message(
+                chat_id,
+                faq,
+                reply_markup=markup
+            )
+            print("✅ FAQ enviado con éxito (mensaje nuevo)")
+        except Exception as e2:
+            print(f"❌ Error al enviar mensaje nuevo: {e2}")
+            traceback.print_exc()
+    
+    print("### FIN FAQ_GRUPO CALLBACK ###\n\n")
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "volver_instrucciones")
+def handler_volver_instrucciones(call):
+    """Vuelve a mostrar las instrucciones originales"""
+    chat_id = call.message.chat.id
+    user_id = call.from_user.id
+    
+    # Depuración adicional
+    print(f"\n\n### INICIO VOLVER_INSTRUCCIONES CALLBACK ###")
+    print(f"🔍 Callback data: {call.data}")
+    print(f"👤 User ID: {user_id}, Chat ID: {chat_id}")
+    print(f"📝 Message ID: {call.message.message_id}")
+    
+    # Responder al callback inmediatamente
+    try:
+        bot.answer_callback_query(call.id)
+        print("✅ Callback respondido correctamente")
+    except Exception as e:
+        print(f"❌ Error al responder al callback: {e}")
+    
+    # Solución para evitar crear un mensaje simulado
+    try:
+        print("🔄 Preparando llamada a crear_grupo...")
+        
+        # Crear una clase simple que emule lo necesario de Message
+        class SimpleMessage:
+            def __init__(self, chat_id, user_id, text):
+                self.chat = types.Chat(chat_id, 'private')
+                self.from_user = types.User(user_id, False, 'Usuario')
+                self.text = text
+        
+        # Crear el mensaje simplificado
+        msg = SimpleMessage(chat_id, user_id, '/crear_grupo_tutoria')
+        
+        # Llamar directamente a la función
+        print("🔄 Llamando a crear_grupo...")
+        crear_grupo(msg)
+        print("✅ crear_grupo llamado con éxito")
+    except Exception as e:
+        print(f"❌ Error al llamar a crear_grupo: {str(e)}")
+        import traceback
+        print("📋 Traza de error completa:")
+        traceback.print_exc()
+        bot.send_message(chat_id, "❌ Error al volver a las instrucciones. Intenta usar /crear_grupo_tutoria directamente.")
+    
+    print("### FIN VOLVER_INSTRUCCIONES CALLBACK ###\n\n")
+
+# Modificar el handler universal para mejorar la depuración sin interferir
 @bot.callback_query_handler(func=lambda call: True)
 def debug_callback_universal(call):
-    """Registra el callback y permite que otros handlers lo procesen"""
-    print(f"🔍 DEBUG: Callback recibido: {call.data}")
-    # NO llamar a bot.answer_callback_query() aquí
-    return False  # Crucial: permite que otros handlers lo procesen
+    """Registra el callback para depuración sin interferir con otros handlers"""
+    print(f"\n🔍 DEBUG UNIVERSAL: Callback recibido: {call.data}")
+    print(f"👤 Usuario: {call.from_user.id}, Chat: {call.message.chat.id}")
+    print(f"📝 Message ID: {call.message.message_id}")
+    
+    # NO respondemos al callback y retornamos False para permitir que otros handlers lo procesen
+    # IMPORTANTE: Debe ser False para que los otros handlers se ejecuten
+    return False
+
+
+
+# Esta función debe ser llamada al finalizar el registro
+def enviar_mensaje_bienvenida(chat_id, tipo_usuario):
+    """Envía un mensaje de bienvenida personalizado según el tipo de usuario"""
+    if tipo_usuario == 'profesor':
+        mensaje = (
+            "🎓 *¡Bienvenido al Sistema de Tutorías UGR, Profesor!*\n\n"
+            "Ahora puedes gestionar tus tutorías de forma eficiente. Estas son tus principales funciones:\n\n"
+            "📅 *Configurar horario de tutorías*\n"
+            "Comando: /configurar_horario\n"
+            "Te permite establecer las franjas horarias en las que atenderás tutorías.\n\n"
+            "👥 *Crear grupos de tutoría*\n"
+            "Comando: /crear_grupo_tutoria\n"
+            "Crea salas de tutoría para tus asignaturas, ya sea para tutorías individuales, grupales o avisos.\n\n"
+            "📋 *Ver tus datos y grupos*\n"
+            "Comando: /ver_misdatos\n"
+            "Consulta tu información registrada y gestiona tus salas de tutoría.\n\n"
+            "🔍 *Ayuda detallada*\n"
+            "Comando: /help\n"
+            "Muestra todos los comandos disponibles con explicaciones.\n\n"
+            "Tu próximo paso recomendado es configurar tu horario de tutorías usando /configurar_horario"
+        )
+    else:
+        mensaje = (
+            "👋 *¡Bienvenido al Sistema de Tutorías UGR, Estudiante!*\n\n"
+            "Ahora puedes solicitar tutorías y recibir avisos importantes de tus profesores. Estas son tus principales funciones:\n\n"
+            "📅 *Solicitar tutorías*\n"
+            "Comando: /solicitar_tutoria\n"
+            "Envía solicitudes para tutorías individuales con tus profesores.\n\n"
+            "📢 *Recibir avisos*\n"
+            "Los profesores te enviarán avisos importantes a través de canales específicos.\n\n"
+            "👥 *Ver grupos de tutoría*\n"
+            "Comando: /ver_mis_grupos\n"
+            "Consulta los grupos de tutoría a los que perteneces y sus propósitos.\n\n"
+            "🔍 *Ayuda detallada*\n"
+            "Comando: /help\n"
+            "Muestra todos los comandos disponibles con explicaciones.\n\n"
+            "Tu próximo paso recomendado es solicitar una tutoría usando /solicitar_tutoria"
+        )
 
 
 # Inicializar y ejecutar el bot
@@ -1111,49 +1407,4 @@ if __name__ == "__main__":
             traceback.print_exc()
             # Esperar antes de reconectar
             time.sleep(15)
-
-# Esta función debe ser llamada al finalizar el registro
-def enviar_mensaje_bienvenida(chat_id, tipo_usuario):
-    """Envía un mensaje de bienvenida personalizado según el tipo de usuario"""
-    if tipo_usuario == 'profesor':
-        mensaje = (
-            "🎓 *¡Bienvenido al Sistema de Tutorías UGR, Profesor!*\n\n"
-            "Ahora puedes gestionar tus tutorías de forma eficiente. Estas son tus principales funciones:\n\n"
-            "📅 *Configurar horario de tutorías*\n"
-            "Comando: /configurar_horario\n"
-            "Te permite establecer las franjas horarias en las que atenderás tutorías.\n\n"
-            "👥 *Crear grupos de tutoría*\n"
-            "Comando: /crear_grupo_tutoria\n"
-            "Crea salas de tutoría para tus asignaturas, ya sea para tutorías individuales, grupales o avisos.\n\n"
-            "📋 *Ver tus datos y grupos*\n"
-            "Comando: /ver_misdatos\n"
-            "Consulta tu información registrada y gestiona tus salas de tutoría.\n\n"
-            "🔍 *Ayuda detallada*\n"
-            "Comando: /help\n"
-            "Muestra todos los comandos disponibles con explicaciones.\n\n"
-            "Tu próximo paso recomendado es configurar tu horario de tutorías usando /configurar_horario"
-        )
-    else:  # estudiante
-        mensaje = (
-            "🎓 *¡Bienvenido al Sistema de Tutorías UGR, Estudiante!*\n\n"
-            "Ahora puedes gestionar tus tutorías de forma eficiente. Estas son tus principales funciones:\n\n"
-            "👨‍🏫 *Solicitar tutorías*\n"
-            "Comando: /tutoria\n"
-            "Te muestra los profesores disponibles para tus asignaturas y te permite solicitar tutorías.\n\n"
-            "📋 *Ver tus datos*\n"
-            "Comando: /ver_misdatos\n"
-            "Consulta tu información registrada y asignaturas matriculadas.\n\n"
-            "🔍 *Ayuda detallada*\n"
-            "Comando: /help\n"
-            "Muestra todos los comandos disponibles con explicaciones.\n\n"
-            "Tu próximo paso recomendado es explorar tus profesores disponibles usando /tutoria"
-        )
-    
-    try:
-        # Enviar mensaje con formato markdown
-        bot.send_message(chat_id, mensaje, parse_mode="Markdown")
-    except Exception as e:
-        # Si falla el formateo, enviar sin formato
-        print(f"Error al enviar mensaje de bienvenida: {e}")
-        bot.send_message(chat_id, mensaje.replace('*', ''), parse_mode=None)
 

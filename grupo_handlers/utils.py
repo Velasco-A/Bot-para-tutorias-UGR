@@ -7,27 +7,25 @@ import logging
 import sys
 import os
 from pathlib import Path
+from telebot import types
 
+# Configurar paths para importaciones
 root_path = str(Path(__file__).parent.parent.absolute())
 if root_path not in sys.path:
     sys.path.insert(0, root_path)
-# Ahora importamos con una ruta absoluta que evita la ambigüedad
+
+# Cargar state_manager usando importación dinámica para evitar problemas de rutas
 import importlib.util
-
-# Ruta absoluta al archivo state_manager.py
 state_manager_path = Path(__file__).parent.parent / "utils" / "state_manager.py"
-
-# Cargar el módulo directamente sin depender de imports relativos
 spec = importlib.util.spec_from_file_location("state_manager", state_manager_path)
 state_manager = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(state_manager)
 
-# Obtener las variables
+# Obtener las variables de estado
 user_states = state_manager.user_states
 user_data = state_manager.user_data
 estados_timestamp = state_manager.estados_timestamp
 
-from telebot import types
 # Importar funciones de la base de datos compartidas
 from db.queries import (
     get_user_by_telegram_id, 
@@ -37,10 +35,7 @@ from db.queries import (
     añadir_estudiante_grupo
 )
 
-# Variables globales para manejo de estados
-# user_states = {}
-# user_data = {}
-# estados_timestamp = {}
+# Constantes
 MAX_ESTADO_DURACION = 3600  # 1 hora en segundos
 
 def configurar_logger():
@@ -61,6 +56,7 @@ def configurar_logger():
 # Obtener logger
 logger = configurar_logger()
 
+# Funciones de interfaz de usuario
 def menu_profesor():
     """Crea un menú con botones específicos para profesores."""
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
@@ -71,17 +67,40 @@ def menu_profesor():
     markup.add(
         types.KeyboardButton("📝 Ver Valoraciones")
     )
-    markup.add(types.KeyboardButton("Terminar Tutoria"))
+    markup.add(types.KeyboardButton("❌ Terminar Tutoria"))
     return markup
 
 def menu_estudiante():
     """Crea un menú con botones específicos para estudiantes."""
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
-        types.KeyboardButton("Terminar Tutoria")
+        types.KeyboardButton("❌ Terminar Tutoria")
     )
     return markup
 
+def configurar_comandos_por_rol():
+    """Devuelve listas de comandos específicos para profesores y estudiantes."""
+    # Comandos para profesores
+    comandos_profesor = [
+        types.BotCommand('/start', 'Iniciar el bot'),
+        types.BotCommand('/ayuda', 'Mostrar ayuda del bot'),
+        types.BotCommand('/estudiantes', 'Ver lista de estudiantes'),
+        types.BotCommand('/estadisticas', 'Ver estadísticas de tutorías'),
+        types.BotCommand('/finalizar', 'Finalizar una sesión de tutoría'),
+        types.BotCommand('/cambiar_asignatura', 'Cambiar asignatura de una sala'),
+        types.BotCommand('/eliminar_sala', 'Eliminar configuración de una sala')
+    ]
+    
+    # Comandos para estudiantes
+    comandos_estudiante = [
+        types.BotCommand('/start', 'Iniciar el bot'),
+        types.BotCommand('/ayuda', 'Mostrar ayuda del bot'),
+        types.BotCommand('/finalizar', 'Finalizar una sesión de tutoría')
+    ]
+    
+    return comandos_profesor, comandos_estudiante
+
+# Funciones de verificación y estado
 def es_profesor(user_id):
     """Verifica si el usuario es un profesor"""
     user = get_user_by_telegram_id(user_id)
@@ -110,6 +129,7 @@ def limpiar_estados_obsoletos():
     if usuarios_para_limpiar:
         logger.info(f"Limpiados {len(usuarios_para_limpiar)} estados obsoletos")
 
+# Funciones de base de datos
 def inicializar_tablas_grupo():
     """Inicializa las tablas necesarias para grupos"""
     conn = get_db_connection()
@@ -117,7 +137,15 @@ def inicializar_tablas_grupo():
     
     # Crear tabla Usuario_Grupo
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS Usuario_Grupo (...)
+        CREATE TABLE IF NOT EXISTS Usuario_Grupo (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Id_usuario INTEGER,
+            id_sala INTEGER,
+            fecha_union TEXT,
+            FOREIGN KEY (Id_usuario) REFERENCES Usuarios(Id_usuario),
+            FOREIGN KEY (id_sala) REFERENCES Grupos_tutoria(id_sala),
+            UNIQUE(Id_usuario, id_sala)
+        )
     """)
     
     # Verificar columna chat_id en Grupos_tutoria
@@ -148,28 +176,11 @@ def guardar_usuario_en_grupo(user_id, username, chat_id):
         else:
             user_id_db = user['Id_usuario']
         
-        # Asegurar estructura de tabla (esto debería moverse a un script de inicialización)
+        # Asegurar estructura de tabla
+        inicializar_tablas_grupo()
+        
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS Usuario_Grupo (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                Id_usuario INTEGER,
-                id_sala INTEGER,
-                fecha_union TEXT,
-                FOREIGN KEY (Id_usuario) REFERENCES Usuarios(Id_usuario),
-                FOREIGN KEY (id_sala) REFERENCES Grupos_tutoria(id_sala),
-                UNIQUE(Id_usuario, id_sala)
-            )
-        """)
-        
-        # Verifica/modifica el esquema (debería estar en un script de inicialización)
-        cursor.execute("PRAGMA table_info(Grupos_tutoria)")
-        columnas = [info[1] for info in cursor.fetchall()]
-        if "chat_id" not in columnas:
-            cursor.execute("ALTER TABLE Grupos_tutoria ADD COLUMN chat_id INTEGER")
-            logger.info("Añadida columna 'chat_id' a Grupos_tutoria")
         
         # Buscar grupo por chat_id 
         cursor.execute("SELECT id_sala FROM Grupos_tutoria WHERE chat_id = ?", (chat_id,))
@@ -198,6 +209,7 @@ def guardar_usuario_en_grupo(user_id, username, chat_id):
         logger.error(f"Error guardando usuario en grupo: {e}")
         return False
 
+# Funciones de formateo de mensajes
 def escape_markdown(text):
     """Escapa caracteres especiales de Markdown"""
     if not text:

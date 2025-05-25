@@ -264,27 +264,24 @@ def get_matriculas_usuario(user_id):
         conn.close()
 
 # ===== FUNCIONES DE GRUPOS =====
-def crear_grupo_tutoria(profesor_id, nombre_sala, tipo_sala, asignatura_id=None, chat_id=None, enlace=None):
-    """Crea un nuevo grupo de tutoría"""
+def crear_grupo_tutoria(profesor_id, nombre_sala, tipo_sala, asignatura_id, chat_id, enlace=None, proposito=None):
+    """Crea un nuevo grupo de tutoría en la base de datos"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
-        cursor.execute("""
+        cursor.execute('''
             INSERT INTO Grupos_tutoria 
-            (Id_usuario, Nombre_sala, Tipo_sala, Id_asignatura, Chat_id, Enlace_invitacion)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (profesor_id, nombre_sala, tipo_sala, asignatura_id, chat_id, enlace))
-        
-        cursor.execute("SELECT last_insert_rowid()")
-        grupo_id = cursor.fetchone()[0]
+            (Id_usuario, Nombre_sala, Tipo_sala, Id_asignatura, Chat_id, Enlace_invitacion, Proposito_sala) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (profesor_id, nombre_sala, tipo_sala, asignatura_id, str(chat_id), enlace, proposito))
         
         conn.commit()
+        grupo_id = cursor.lastrowid
         return grupo_id
     except Exception as e:
         conn.rollback()
-        logger.error(f"Error al crear grupo de tutoría: {e}")
-        raise
+        raise e
     finally:
         conn.close()
 
