@@ -216,6 +216,7 @@ from handlers.registro import register_handlers as register_registro_handlers
 from handlers.tutorias import register_handlers as register_tutorias_handlers
 from handlers.horarios import register_handlers as register_horarios_handlers
 from utils.excel_manager import verificar_excel_disponible
+from grupo_handlers.grupos import GestionGrupos
 
 # Verificar si es la primera ejecución
 MARKER_FILE = os.path.join(os.path.dirname(DB_PATH), ".initialized")
@@ -286,29 +287,9 @@ def handle_edit_sala(call):
         
         print(f"✅ Sala encontrada: {sala['Nombre_sala']} (Chat ID: {sala['Chat_id']})")
         
-        # Mostrar opciones de edición (simplificadas)
-        print("🔘 Generando botones de opciones...")
+        # Mostrar opciones simplificadas (solo eliminar)
+        print("🔘 Generando botón de eliminación...")
         markup = types.InlineKeyboardMarkup(row_width=1)
-        
-        # Diccionario de propósitos con emojis (solo avisos e individual)
-        propositos = {
-            'individual': '👨‍🏫 Tutorías individuales',
-            'avisos': '📢 Canal de avisos'
-        }
-        
-        # Crear botones para cada propósito posible
-        for key, value in propositos.items():
-            # Marcar el propósito actual
-            if sala['Proposito_sala'] == key:
-                text = f"✅ {value} (actual)"
-            else:
-                text = value
-            
-            markup.add(types.InlineKeyboardButton(
-                text,
-                callback_data=f"cambiar_proposito_{sala_id}_{key}"
-            ))
-            print(f"  ✓ Botón propósito: {key} con callback: cambiar_proposito_{sala_id}_{key}")
         
         # Añadir opción para eliminar la sala
         markup.add(types.InlineKeyboardButton(
@@ -323,13 +304,16 @@ def handle_edit_sala(call):
             callback_data=f"cancelar_edicion_{sala_id}"
         ))
         
-        print(f"📤 Enviando mensaje de edición con {len(markup.keyboard)} botones")
+        # Preparar textos seguros para Markdown
+        nombre_sala = escape_markdown(sala['Nombre_sala'])
+        nombre_asignatura = escape_markdown(sala['NombreAsignatura'] or 'General')
+        
+        print(f"📤 Enviando mensaje de edición")
         bot.edit_message_text(
-            f"🔄 *Editar propósito de sala*\n\n"
-            f"*Sala:* {escape_markdown(sala['Nombre_sala'])}\n"
-            f"*Propósito actual:* {escape_markdown(propositos.get(sala['Proposito_sala'], 'General'))}\n"
-            f"*Asignatura:* {escape_markdown(sala['NombreAsignatura'] or 'General')}\n\n"
-            f"Selecciona el nuevo propósito para esta sala:",
+            f"🔄 *Gestionar sala*\n\n"
+            f"*Sala:* {nombre_sala}\n"
+            f"*Asignatura:* {nombre_asignatura}\n\n"
+            f"Selecciona la acción que deseas realizar:",
             chat_id=chat_id,
             message_id=call.message.message_id,
             reply_markup=markup,
@@ -342,10 +326,19 @@ def handle_edit_sala(call):
         import traceback
         print(traceback.format_exc())
     
-    print(f"### FIN EDIT_SALA ###\n")
     bot.answer_callback_query(call.id)
     print("✅ Respuesta de callback enviada")
     print(f"### FIN EDIT_SALA - Callback: {call.data} ###\n")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("cancelar_edicion_"))
+def handle_cancelar_edicion(call):
+    """Cancela la edición de la sala"""
+    bot.edit_message_text(
+        "❌ Operación cancelada. No se realizaron cambios.",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id
+    )
+    bot.answer_callback_query(call.id)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("cambiar_proposito_"))
 def handle_cambiar_proposito(call):
@@ -479,20 +472,75 @@ def handle_confirmar_cambio(call):
     cursor = conn.cursor()
     
     try:
+        # Obtener información de la sala
+        cursor.execute(
+            """
+            SELECT g.*, a.Nombre as NombreAsignatura, u.Nombre as NombreProfesor
+            FROM Grupos_tutoria g
+            LEFT JOIN Asignaturas a ON g.Id_asignatura = a.Id_asignatura
+            LEFT JOIN Usuarios u ON g.Id_usuario = u.Id_usuario
+            WHERE g.id_sala = ?
+            """, 
+            (sala_id,)
+        )
+        sala = cursor.fetchone()
+        
+        if not sala:
+            bot.answer_callback_query(call.id, "❌ Error: No se encontró la sala")
+            conn.close()
+            return
+        
         # 1. Actualizar el propósito de la sala
         cursor.execute(
-            "UPDATE Grupos_tutoria SET Proposito_sala = ? WHERE id_sala = ? AND Id_usuario = ?",  # cambiar chat_id por id_sala
+            "UPDATE Grupos_tutoria SET Proposito_sala = ? WHERE id_sala = ? AND Id_usuario = ?",
             (nuevo_proposito, sala_id, user['Id_usuario'])
         )
         
         # 2. Actualizar el tipo de sala según el propósito
         tipo_sala = 'pública' if nuevo_proposito == 'avisos' else 'privada'
         cursor.execute(
-            "UPDATE Grupos_tutoria SET Tipo_sala = ? WHERE id_sala = ?",  # cambiar chat_id por id_sala
+            "UPDATE Grupos_tutoria SET Tipo_sala = ? WHERE id_sala = ?",
             (tipo_sala, sala_id)
         )
         
-        # 3. Gestionar miembros según la decisión
+        # 3. Generar y actualizar el nuevo nombre según el propósito
+        nuevo_nombre = None
+        if nuevo_proposito == 'avisos':
+            nuevo_nombre = f"Avisos: {sala['NombreAsignatura']}"
+        elif nuevo_proposito == 'individual':
+            nuevo_nombre = f"Tutoría Privada - Prof. {sala['NombreProfesor']}"
+        
+        # Actualizar el nombre en la BD
+        if nuevo_nombre:
+            cursor.execute(
+                "UPDATE Grupos_tutoria SET Nombre_sala = ? WHERE id_sala = ?",
+                (nuevo_nombre, sala_id)
+            )
+            
+            # Intentar cambiar el nombre en Telegram
+            telegram_chat_id = sala['Chat_id']
+            
+            # Primero intentar con el bot actual (aunque probablemente fallará)
+            try:
+                bot.set_chat_title(telegram_chat_id, nuevo_nombre)
+                print(f"✅ Nombre del grupo actualizado a: {nuevo_nombre}")
+            except Exception as e:
+                print(f"⚠️ Bot principal no pudo cambiar el nombre: {e}")
+                
+                # Si falla, utilizar la función del bot de grupos
+                try:
+                    # Importar la función de cambio de nombre de grupos.py
+                    from grupo_handlers.grupos import cambiar_nombre_grupo_telegram
+                    
+                    # Llamar a la función para cambiar el nombre
+                    if cambiar_nombre_grupo_telegram(telegram_chat_id, nuevo_nombre):
+                        print(f"✅ Nombre del grupo actualizado usando el bot de grupos")
+                    else:
+                        print(f"❌ No se pudo cambiar el nombre del grupo ni siquiera con el bot de grupos")
+                except Exception as e:
+                    print(f"❌ Error al intentar utilizar la función del bot de grupos: {e}")
+        
+        # 4. Gestionar miembros según la decisión
         if decision_miembros == "eliminar":
             # Eliminar todos los miembros excepto el profesor creador
             cursor.execute(
@@ -672,7 +720,7 @@ def handle_ver_miembros(call):
 def handle_cancelar_edicion(call):
     """Cancela la edición de la sala"""
     bot.edit_message_text(
-        "❌ Edición cancelada. No se realizaron cambios.",
+        "❌ Operación cancelada. No se realizaron cambios.",
         chat_id=call.message.chat.id,
         message_id=call.message.message_id
     )
@@ -756,18 +804,76 @@ def realizar_cambio_proposito(chat_id, message_id, sala_id, nuevo_proposito, use
     cursor = conn.cursor()
     
     try:
+        # Obtener datos actuales de la sala
+        cursor.execute(
+            """
+            SELECT g.*, a.Nombre as NombreAsignatura
+            FROM Grupos_tutoria g
+            LEFT JOIN Asignaturas a ON g.Id_asignatura = a.Id_asignatura
+            WHERE g.id_sala = ?
+            """, 
+            (sala_id,)
+        )
+        sala = cursor.fetchone()
+        
+        if not sala:
+            bot.edit_message_text(
+                "❌ Error: No se encontró la sala",
+                chat_id=chat_id,
+                message_id=message_id
+            )
+            conn.close()
+            return
+        
         # Actualizar propósito
         cursor.execute(
-            "UPDATE Grupos_tutoria SET Proposito_sala = ? WHERE id_sala = ? AND Id_usuario = ?",  # cambiar chat_id por id_sala
+            "UPDATE Grupos_tutoria SET Proposito_sala = ? WHERE id_sala = ? AND Id_usuario = ?",
             (nuevo_proposito, sala_id, user_id)
         )
         
         # Actualizar tipo
         tipo_sala = 'pública' if nuevo_proposito == 'avisos' else 'privada'
         cursor.execute(
-            "UPDATE Grupos_tutoria SET Tipo_sala = ? WHERE id_sala = ?",  # cambiar chat_id por id_sala
+            "UPDATE Grupos_tutoria SET Tipo_sala = ? WHERE id_sala = ?",
             (tipo_sala, sala_id)
         )
+        
+        # Generar nuevo nombre según el propósito
+        nuevo_nombre = None
+        if nuevo_proposito == 'avisos':
+            nuevo_nombre = f"Avisos: {sala['NombreAsignatura']}"
+        elif nuevo_proposito == 'individual':
+            nuevo_nombre = f"Tutoría Privada - Prof. {obtener_nombre_profesor(user_id)}"
+        
+        # Si se generó un nuevo nombre, actualizar en la base de datos
+        if nuevo_nombre:
+            cursor.execute(
+                "UPDATE Grupos_tutoria SET Nombre_sala = ? WHERE id_sala = ?",
+                (nuevo_nombre, sala_id)
+            )
+            
+            # Intentar cambiar el nombre del grupo en Telegram
+            telegram_chat_id = sala['Chat_id']
+            
+            # Primero intentar con el bot actual (aunque probablemente fallará)
+            try:
+                bot.set_chat_title(telegram_chat_id, nuevo_nombre)
+                print(f"✅ Nombre del grupo actualizado a: {nuevo_nombre}")
+            except Exception as e:
+                print(f"⚠️ Bot principal no pudo cambiar el nombre: {e}")
+                
+                # Si falla, utilizar la función del bot de grupos
+                try:
+                    # Importar la función de cambio de nombre de grupos.py
+                    from grupo_handlers.grupos import cambiar_nombre_grupo_telegram
+                    
+                    # Llamar a la función para cambiar el nombre
+                    if cambiar_nombre_grupo_telegram(telegram_chat_id, nuevo_nombre):
+                        print(f"✅ Nombre del grupo actualizado usando el bot de grupos")
+                    else:
+                        print(f"❌ No se pudo cambiar el nombre del grupo ni siquiera con el bot de grupos")
+                except Exception as e:
+                    print(f"❌ Error al intentar utilizar la función del bot de grupos: {e}")
         
         conn.commit()
         
@@ -781,7 +887,7 @@ def realizar_cambio_proposito(chat_id, message_id, sala_id, nuevo_proposito, use
             """, 
             (sala_id,)
         )
-        sala = cursor.fetchone()
+        sala_actualizada = cursor.fetchone()
         
         # Textos para los propósitos
         propositos = {
@@ -793,9 +899,9 @@ def realizar_cambio_proposito(chat_id, message_id, sala_id, nuevo_proposito, use
         # Enviar confirmación
         bot.edit_message_text(
             f"✅ *¡Propósito actualizado correctamente!*\n\n"
-            f"*Sala:* {sala['Nombre_sala']}\n"
+            f"*Sala:* {sala_actualizada['Nombre_sala']}\n"
             f"*Nuevo propósito:* {propositos.get(nuevo_proposito, 'General')}\n"
-            f"*Asignatura:* {sala['NombreAsignatura'] or 'General'}\n\n"
+            f"*Asignatura:* {sala_actualizada['NombreAsignatura'] or 'General'}\n\n"
             f"La sala está lista para su nuevo propósito.",
             chat_id=chat_id,
             message_id=message_id,
@@ -807,41 +913,37 @@ def realizar_cambio_proposito(chat_id, message_id, sala_id, nuevo_proposito, use
         bot.send_message(chat_id, "❌ Error al actualizar la sala")
     finally:
         conn.close()
-        
+
+def obtener_nombre_profesor(user_id):
+    """Obtiene el nombre del profesor a partir del id de usuario"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT Nombre FROM Usuarios WHERE Id_usuario = ?", (user_id,))
+    resultado = cursor.fetchone()
+    conn.close()
+    return resultado['Nombre'] if resultado else "Profesor"
+
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith("eliminarsala_"))
 def handle_eliminar_sala(call):
-    """Solicita confirmación para eliminar una sala"""
+    """Maneja la solicitud de eliminación de una sala"""
     chat_id = call.message.chat.id
     print(f"\n\n### INICIO ELIMINAR_SALA - Callback: {call.data} ###")
-    print(f"👤 Usuario: {call.from_user.id}, Chat ID: {chat_id}")
-    print(f"📤 Mensaje ID: {call.message.message_id}")
-    
-    # Responder al callback inmediatamente
-    bot.answer_callback_query(call.id)
     
     try:
-        partes = call.data.split("_")
-        print(f"🔍 Partes del callback: {partes}")
-        
-        if len(partes) < 2:
-            print("❌ Callback con formato incorrecto")
-            bot.answer_callback_query(call.id, "❌ Error: formato de callback incorrecto")
-            return
-            
-        sala_id = int(partes[1])
+        sala_id = int(call.data.split("_")[1])
         print(f"🔍 Sala ID a eliminar: {sala_id}")
         
-        # Verificar usuario
+        # Verificar que el usuario es el propietario de la sala
         user = get_user_by_telegram_id(call.from_user.id)
-        print(f"👤 Usuario: {user['Nombre'] if user else 'No encontrado'} (ID: {call.from_user.id})")
         
         if not user or user['Tipo'] != 'profesor':
             print("⚠️ Usuario no es profesor o no existe")
-            bot.answer_callback_query(call.id, "⚠️ No tienes permisos para esta acción")
+            bot.answer_callback_query(call.id, "⚠️ Solo los profesores propietarios pueden eliminar salas")
             return
         
         # Obtener datos de la sala
-        print(f"🔍 Consultando detalles de sala ID {sala_id}")
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -849,7 +951,7 @@ def handle_eliminar_sala(call):
             SELECT g.*, a.Nombre as NombreAsignatura
             FROM Grupos_tutoria g
             LEFT JOIN Asignaturas a ON g.Id_asignatura = a.Id_asignatura
-            WHERE g.id_sala = ? AND g.Id_usuario = ?
+            WHERE g.id_sala = ? AND g.Id_usuario = ?  
             """, 
             (sala_id, user['Id_usuario'])
         )
@@ -860,217 +962,162 @@ def handle_eliminar_sala(call):
             bot.answer_callback_query(call.id, "❌ No se encontró la sala o no tienes permisos")
             conn.close()
             return
-            
-        print(f"✅ Sala encontrada: {sala['Nombre_sala']} (ID: {sala_id}, Chat ID: {sala['Chat_id']})")
         
-        # Contar miembros
-        print(f"🔍 Contando miembros de la sala")
+        print(f"✅ Sala encontrada: {sala['Nombre_sala']} (Chat ID: {sala['Chat_id']})")
+        
+        # Contar miembros actuales
         cursor.execute(
             "SELECT COUNT(*) as total FROM Miembros_Grupo WHERE id_sala = ? AND Estado = 'activo'",
             (sala_id,)
         )
         miembros = cursor.fetchone()
         total_miembros = miembros['total'] if miembros else 0
-        print(f"👥 Total miembros: {total_miembros}")
         conn.close()
         
-        # Almacenar Chat_id para usarlo en la eliminación
-        telegram_chat_id = sala['Chat_id']
+        # Preparar textos seguros para Markdown
+        nombre_sala = escape_markdown(sala['Nombre_sala'])
+        nombre_asignatura = escape_markdown(sala['NombreAsignatura'] or 'General')
         
-        # Crear mensaje de confirmación
-        print("📝 Creando mensaje de confirmación")
-        mensaje = (
-            f"⚠️ *¿Estás seguro de eliminar esta sala?*\n\n"
-            f"*Sala:* {escape_markdown(sala['Nombre_sala'])}\n"
-            f"*ID sala:* `{sala_id}`\n"
-            f"*Chat ID Telegram:* `{telegram_chat_id}`\n"
-            f"*Asignatura:* {escape_markdown(sala['NombreAsignatura'] or 'General')}\n"
-            f"*Miembros actuales:* {total_miembros}\n\n"
-            f"Esta acción *no se puede deshacer* y eliminará la sala junto con todos sus miembros "
-            f"y configuraciones."
-        )
+        # Confirmar la eliminación con botones
+        markup = types.InlineKeyboardMarkup(row_width=1)
         
-        # Crear botones de confirmación, pasando también el Chat_id
-        print("🔘 Creando botones de confirmación")
-        markup = types.InlineKeyboardMarkup(row_width=2)
-        callback_data = f"confirmar_eliminar_{sala_id}_{telegram_chat_id}"
-        print(f"  → Callback de confirmación: {callback_data}")
+        markup.add(types.InlineKeyboardButton(
+            "✅ Sí, eliminar esta sala",
+            callback_data=f"confirmar_eliminar_{sala_id}"
+        ))
         
-        markup.add(
-            types.InlineKeyboardButton(
-                "✅ Sí, eliminar",
-                callback_data=callback_data
-            ),
-            types.InlineKeyboardButton(
-                "❌ No, cancelar",
-                callback_data=f"cancelar_edicion_{sala_id}"
-            )
-        )
+        markup.add(types.InlineKeyboardButton(
+            "❌ No, cancelar",
+            callback_data=f"cancelar_edicion_{sala_id}"
+        ))
         
         # Enviar mensaje de confirmación
-        print("📤 Enviando mensaje de confirmación")
-        try:
-            bot.edit_message_text(
-                mensaje,
-                chat_id=chat_id,
-                message_id=call.message.message_id,
-                reply_markup=markup,
-                parse_mode="Markdown"
-            )
-            print("✅ Mensaje de confirmación enviado correctamente")
-        except telebot.apihelper.ApiTelegramException as e:
-            print(f"⚠️ Error al editar mensaje: {e}")
-            if "message is not modified" in str(e):
-                print("  → Ignorando error de mensaje no modificado")
-            else:
-                print("  → Intentando enviar mensaje nuevo")
-                bot.send_message(
-                    chat_id,
-                    mensaje,
-                    reply_markup=markup,
-                    parse_mode="Markdown"
-                )
-                print("  ✅ Nuevo mensaje enviado correctamente")
-        
-    except Exception as e:
-        print(f"❌ ERROR GENERAL en handle_eliminar_sala: {e}")
-        import traceback
-        print(traceback.format_exc())
-        bot.send_message(
-            chat_id,
-            "❌ Error al procesar la solicitud de eliminación. Inténtalo de nuevo."
-        )
-    
-    print(f"### FIN ELIMINAR_SALA ###\n")
-    
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("confirmar_eliminar_"))
-def handle_confirmar_eliminar(call):
-    """Elimina definitivamente la sala después de la confirmación"""
-    chat_id = call.message.chat.id
-    print(f"\n\nDEBUG CONFIRMAR: Entrando en handle_confirmar_eliminar con data: {call.data}")
-    print(f"👤 Usuario: {call.from_user.id}, Chat ID: {chat_id}")
-    bot.answer_callback_query(call.id)
-    try:
-        # Extraer IDs de la cadena de callback
-        data = call.data.split("_")
-        print(f"DEBUG CONFIRMAR: Partes del callback: {data}")
-        
-        if len(data) < 4:  # Verificar que tenemos suficientes partes
-            print(f"DEBUG CONFIRMAR: Formato de datos incorrecto, partes: {len(data)}")
-            bot.send_message(chat_id, "❌ Error: formato de datos incorrecto")
-            return
-            
-        sala_id = int(data[2])
-        telegram_chat_id = data[3]  # Obtener el Chat_id de Telegram
-        
-        print(f"DEBUG CONFIRMAR: Procesando eliminación de sala_id={sala_id}, Chat_id={telegram_chat_id}")
-        
-        # Verificar usuario
-        user = get_user_by_telegram_id(call.from_user.id)
-        if not user or user['Tipo'] != 'profesor':
-            print(f"DEBUG CONFIRMAR: Usuario no autorizado: {call.from_user.id}")
-            bot.answer_callback_query(call.id, "⚠️ No tienes permisos para esta acción")
-            return
-            
-        print(f"DEBUG CONFIRMAR: Usuario autorizado: {user['Nombre']}")
-        
-        # Eliminar miembros de la sala
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Eliminar primero los miembros
-        cursor.execute("DELETE FROM Miembros_Grupo WHERE id_sala = ?", (sala_id,))
-        
-        # Obtener el nombre de la sala antes de eliminarla
-        cursor.execute("SELECT Nombre_sala FROM Grupos_tutoria WHERE id_sala = ?", (sala_id,))
-        sala_info = cursor.fetchone()
-        nombre_sala = sala_info['Nombre_sala'] if sala_info else "desconocida"
-        
-        # Eliminar la sala
-        cursor.execute("DELETE FROM Grupos_tutoria WHERE (id_sala = ? OR Chat_id = ?) AND Id_usuario = ?", 
-                      (sala_id, telegram_chat_id, user['Id_usuario']))
-        
-        conn.commit()
-        conn.close()
-        
-        # Notificar éxito
-        bot.send_message(
-            chat_id, 
-            f"✅ La sala *{escape_markdown(nombre_sala)}* con ID *{sala_id}* ha sido eliminada correctamente.",
+        bot.edit_message_text(
+            f"⚠️ *¿Estás seguro de que deseas eliminar esta sala?*\n\n"
+            f"*Sala:* {nombre_sala}\n"
+            f"*Asignatura:* {nombre_asignatura}\n"
+            f"*Miembros actuales:* {total_miembros}\n\n"
+            f"Esta acción es irreversible. La sala será eliminada de la base de datos "
+            f"y se perderá todo el registro de miembros.",
+            chat_id=chat_id,
+            message_id=call.message.message_id,
+            reply_markup=markup,
             parse_mode="Markdown"
         )
         
     except Exception as e:
-        print(f"DEBUG CONFIRMAR: Error general: {e}")
-        print(f"DEBUG CONFIRMAR: Traza completa:")
+        print(f"❌ ERROR en handle_eliminar_sala: {e}")
         import traceback
-        traceback.print_exc()
-        try:
-            bot.send_message(
-                chat_id,
-                f"❌ Error al eliminar la sala: {str(e)}"
-            )
-        except:
-            print("No se pudo enviar mensaje de error")
+        print(traceback.format_exc())
     
-    print(f"### FIN CONFIRMAR_ELIMINAR ###\n")
+    bot.answer_callback_query(call.id)
+    print("### FIN ELIMINAR_SALA ###")
 
-
-@bot.message_handler(commands=['debug_sala'])
-def handle_debug_sala(message):
-    """Comando de depuración para examinar una sala por ID"""
-    chat_id = message.chat.id
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirmar_eliminar_"))
+def handle_confirmar_eliminar(call):
+    """Confirma y ejecuta la eliminación de la sala"""
+    chat_id = call.message.chat.id
+    print(f"\n\n### INICIO CONFIRMAR_ELIMINAR - Callback: {call.data} ###")
     
     try:
-        # Verificar que se proporcionó un ID
-        args = message.text.split()
-        if len(args) < 2:
-            bot.send_message(chat_id, "Uso: /debug_sala ID_SALA")
-            return
-            
-        sala_id = int(args[1])
+        sala_id = int(call.data.split("_")[2])
+        print(f"🔍 Sala ID a eliminar definitivamente: {sala_id}")
         
-        # Verificar usuario
-        user = get_user_by_telegram_id(message.from_user.id)
+        # Verificar que el usuario es el propietario de la sala
+        user = get_user_by_telegram_id(call.from_user.id)
+        
         if not user or user['Tipo'] != 'profesor':
-            bot.send_message(chat_id, "⚠️ Solo los profesores pueden usar este comando")
+            print("⚠️ Usuario no es profesor o no existe")
+            bot.answer_callback_query(call.id, "⚠️ Solo los profesores propietarios pueden eliminar salas")
             return
         
-        # Obtener detalles de la sala
+        # Obtener datos de la sala
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT * FROM Grupos_tutoria WHERE id_sala = ?
+            SELECT g.*, a.Nombre as NombreAsignatura
+            FROM Grupos_tutoria g
+            LEFT JOIN Asignaturas a ON g.Id_asignatura = a.Id_asignatura
+            WHERE g.id_sala = ? AND g.Id_usuario = ?  
             """, 
-            (sala_id,)
+            (sala_id, user['Id_usuario'])
         )
         sala = cursor.fetchone()
         
         if not sala:
-            bot.send_message(chat_id, f"❌ No se encontró ninguna sala con ID {sala_id}")
+            print(f"❌ Sala no encontrada o no pertenece al usuario")
+            bot.answer_callback_query(call.id, "❌ No se encontró la sala o no tienes permisos")
             conn.close()
             return
-            
-        # Mostrar información detallada
-        info = f"🔍 *Datos internos de sala ID {sala_id}*\n\n"
-        for key in sala.keys():
-            info += f"*{key}:* `{sala[key]}`\n"
-            
-        # Contar miembros
-        cursor.execute("SELECT COUNT(*) as total FROM Miembros_Grupo WHERE id_sala = ?", (sala_id,))
-        miembros = cursor.fetchone()
-        info += f"\n*Total miembros:* {miembros['total']}\n"
         
+        nombre_sala = sala['Nombre_sala']
+        telegram_chat_id = sala['Chat_id']
+        print(f"✅ Ejecutando eliminación de sala: {nombre_sala} (ID: {sala_id}, Chat ID: {telegram_chat_id})")
+        
+        # 1. Eliminar todos los miembros de la sala
+        print("1️⃣ Eliminando miembros...")
+        cursor.execute(
+            "DELETE FROM Miembros_Grupo WHERE id_sala = ?",
+            (sala_id,)
+        )
+        print(f"  ✓ Miembros eliminados de la BD")
+        
+        # 2. Eliminar la sala de la base de datos
+        print("2️⃣ Eliminando registro de sala...")
+        cursor.execute(
+            "DELETE FROM Grupos_tutoria WHERE id_sala = ? AND Id_usuario = ?",
+            (sala_id, user['Id_usuario'])
+        )
+        print(f"  ✓ Sala eliminada de la BD")
+        
+        # Confirmar cambios en la base de datos
+        conn.commit()
         conn.close()
+        print("✅ Cambios en BD confirmados")
         
-        bot.send_message(chat_id, info, parse_mode="Markdown")
+        # 3. Intentar salir del grupo de Telegram
+        print("3️⃣ Intentando salir del grupo de Telegram...")
+        try:
+            bot.leave_chat(telegram_chat_id)
+            print(f"  ✓ Bot salió del grupo de Telegram: {telegram_chat_id}")
+        except Exception as e:
+            print(f"  ⚠️ No se pudo salir del grupo de Telegram: {e}")
+            
+            # Intentar con el bot de grupos si está disponible
+            try:
+                from grupo_handlers.grupos import salir_de_grupo
+                if salir_de_grupo(telegram_chat_id):
+                    print("  ✓ Bot de grupos salió del grupo")
+                else:
+                    print("  ⚠️ Bot de grupos no pudo salir del grupo")
+            except Exception as e:
+                print(f"  ⚠️ Error al usar la función del bot de grupos: {e}")
+        
+        # 4. Enviar mensaje de confirmación
+        print("4️⃣ Enviando confirmación al usuario...")
+        bot.edit_message_text(
+            f"✅ *Sala eliminada con éxito*\n\n"
+            f"La sala \"{escape_markdown(nombre_sala)}\" ha sido eliminada completamente.\n"
+            f"Todos los miembros y registros asociados han sido eliminados.",
+            chat_id=chat_id,
+            message_id=call.message.message_id,
+            parse_mode="Markdown"
+        )
+        print("  ✓ Mensaje de confirmación enviado")
         
     except Exception as e:
-        bot.send_message(chat_id, f"❌ Error: {str(e)}")
-
-
+        print(f"❌ ERROR en handle_confirmar_eliminar: {e}")
+        import traceback
+        print(traceback.format_exc())
+        bot.edit_message_text(
+            "❌ Ha ocurrido un error al intentar eliminar la sala. Por favor, inténtalo de nuevo.",
+            chat_id=chat_id,
+            message_id=call.message.message_id
+        )
+    
+    bot.answer_callback_query(call.id)
+    print("### FIN CONFIRMAR_ELIMINAR ###")
 
 @bot.message_handler(commands=['crear_grupo_tutoria'])
 def crear_grupo(message):
@@ -1327,84 +1374,41 @@ def handler_volver_instrucciones(call):
     
     print("### FIN VOLVER_INSTRUCCIONES CALLBACK ###\n\n")
 
-# Modificar el handler universal para mejorar la depuración sin interferir
-@bot.callback_query_handler(func=lambda call: True)
-def debug_callback_universal(call):
-    """Registra el callback para depuración sin interferir con otros handlers"""
-    print(f"\n🔍 DEBUG UNIVERSAL: Callback recibido: {call.data}")
-    print(f"👤 Usuario: {call.from_user.id}, Chat: {call.message.chat.id}")
-    print(f"📝 Message ID: {call.message.message_id}")
-    
-    # NO respondemos al callback y retornamos False para permitir que otros handlers lo procesen
-    # IMPORTANTE: Debe ser False para que los otros handlers se ejecuten
-    return False
+# Añadir al final del archivo, después de la función obtener_nombre_profesor
 
+def setup_polling():
+    """Configura el polling para el bot y maneja errores"""
+    print("🤖 Iniciando el bot...")
+    try:
+        # Configurar comandos disponibles
+        if setup_commands():
+            print("✅ Comandos configurados correctamente")
+        else:
+            print("⚠️ Error al configurar comandos")
+        
+        # Iniciar polling en modo no stop
+        bot.infinity_polling(timeout=10, long_polling_timeout=5)
+    except KeyboardInterrupt:
+        print("👋 Bot detenido manualmente")
+        sys.exit(0)
+    except Exception as e:
+        print(f"❌ Error fatal: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Reintentar después de un tiempo
+        print("🔄 Reintentando en 10 segundos...")
+        time.sleep(10)
+        setup_polling()
 
-
-# Esta función debe ser llamada al finalizar el registro
-def enviar_mensaje_bienvenida(chat_id, tipo_usuario):
-    """Envía un mensaje de bienvenida personalizado según el tipo de usuario"""
-    if tipo_usuario == 'profesor':
-        mensaje = (
-            "🎓 *¡Bienvenido al Sistema de Tutorías UGR, Profesor!*\n\n"
-            "Ahora puedes gestionar tus tutorías de forma eficiente. Estas son tus principales funciones:\n\n"
-            "📅 *Configurar horario de tutorías*\n"
-            "Comando: /configurar_horario\n"
-            "Te permite establecer las franjas horarias en las que atenderás tutorías.\n\n"
-            "👥 *Crear grupos de tutoría*\n"
-            "Comando: /crear_grupo_tutoria\n"
-            "Crea salas de tutoría para tus asignaturas, ya sea para tutorías individuales, grupales o avisos.\n\n"
-            "📋 *Ver tus datos y grupos*\n"
-            "Comando: /ver_misdatos\n"
-            "Consulta tu información registrada y gestiona tus salas de tutoría.\n\n"
-            "🔍 *Ayuda detallada*\n"
-            "Comando: /help\n"
-            "Muestra todos los comandos disponibles con explicaciones.\n\n"
-            "Tu próximo paso recomendado es configurar tu horario de tutorías usando /configurar_horario"
-        )
-    else:
-        mensaje = (
-            "👋 *¡Bienvenido al Sistema de Tutorías UGR, Estudiante!*\n\n"
-            "Ahora puedes solicitar tutorías y recibir avisos importantes de tus profesores. Estas son tus principales funciones:\n\n"
-            "📅 *Solicitar tutorías*\n"
-            "Comando: /solicitar_tutoria\n"
-            "Envía solicitudes para tutorías individuales con tus profesores.\n\n"
-            "📢 *Recibir avisos*\n"
-            "Los profesores te enviarán avisos importantes a través de canales específicos.\n\n"
-            "👥 *Ver grupos de tutoría*\n"
-            "Comando: /ver_mis_grupos\n"
-            "Consulta los grupos de tutoría a los que perteneces y sus propósitos.\n\n"
-            "🔍 *Ayuda detallada*\n"
-            "Comando: /help\n"
-            "Muestra todos los comandos disponibles con explicaciones.\n\n"
-            "Tu próximo paso recomendado es solicitar una tutoría usando /solicitar_tutoria"
-        )
-
-
-# Inicializar y ejecutar el bot
 if __name__ == "__main__":
-    # Verificar que existe la base de datos
-    if not os.path.exists(DB_PATH):
-        print(f"❌ Error: Base de datos no encontrada en {DB_PATH}")
-        print("Primero debes crear la base de datos con db/models.py")
-        sys.exit(1)
+    print("="*50)
+    print("🎓 SISTEMA DE TUTORÍAS UGR")
+    print("="*50)
+    print(f"📅 Fecha de inicio: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"💾 Base de datos: {DB_PATH}")
+    print(f"📊 Excel de datos: {EXCEL_PATH}")
+    print("="*50)
     
-    # Configurar los comandos del bot
-    threading.Thread(target=setup_commands).start()
-    
-    print(f"🤖 Bot iniciado - Base de datos: {DB_PATH}")
-    print("Presiona Ctrl+C para detener.")
-    
-    # Iniciar el polling con manejo de errores más robusto
-    while True:
-        try:
-            # Polling con parámetros para mejorar la estabilidad
-            bot.polling(none_stop=True, interval=2, timeout=30)
-        except Exception as e:
-            print(f"❌ Error en el polling: {e}")
-            # Información detallada del error
-            import traceback
-            traceback.print_exc()
-            # Esperar antes de reconectar
-            time.sleep(15)
-
+    # Iniciar el bot
+    setup_polling()

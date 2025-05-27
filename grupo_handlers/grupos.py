@@ -1582,3 +1582,28 @@ def configurar_grupo_comando_direct(bot, chat_id, user_id):
         
         # Limpiar estado
         clear_state(user_id)
+
+def cambiar_nombre_grupo_telegram(chat_id, nuevo_nombre):
+    """
+    Función para cambiar el nombre de un grupo de Telegram.
+    Esta función está diseñada para ser llamada desde main.py
+    
+    Args:
+        chat_id: ID del chat de Telegram
+        nuevo_nombre: Nuevo nombre para el grupo
+    
+    Returns:
+        bool: True si se cambió con éxito, False en caso contrario
+    """
+    try:
+        # Importamos para usar el mismo bot que maneja los grupos
+        from telegram import Bot
+        from config import TOKEN as TELEGRAM_TOKEN  # Asegúrate de tener el token correcto
+        
+        bot = Bot(TELEGRAM_TOKEN)
+        bot.set_chat_title(chat_id, nuevo_nombre)
+        print(f"✅ Nombre del grupo {chat_id} actualizado a: {nuevo_nombre}")
+        return True
+    except Exception as e:
+        print(f"⚠️ Error al cambiar nombre del grupo {chat_id}: {e}")
+        return False

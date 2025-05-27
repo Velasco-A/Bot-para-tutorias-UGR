@@ -144,3 +144,50 @@
 2025-05-25 19:32:11,366 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
 2025-05-25 19:32:11,729 [INFO] Bot de Grupos iniciado
 2025-05-25 23:02:29,320 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)
+2025-05-26 10:51:58,542 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-26 10:51:58,543 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-26 10:51:58,921 [INFO] Bot de Grupos iniciado
+2025-05-26 12:17:59,129 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-26 12:17:59,129 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-26 12:17:59,533 [INFO] Bot de Grupos iniciado
+2025-05-27 11:44:25,212 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-27 11:44:25,212 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-27 11:44:25,476 [INFO] Bot de Grupos iniciado
+2025-05-27 12:03:04,263 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-27 12:03:04,263 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-27 12:03:04,512 [INFO] Bot de Grupos iniciado
+2025-05-27 12:06:26,381 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-27 12:06:26,381 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-27 12:06:26,801 [INFO] Bot de Grupos iniciado
+2025-05-27 12:07:05,671 [ERROR] Error en la selección de asignatura -1002333627224: CHECK constraint failed: Tipo_sala IN ('privada', 'pública')
+2025-05-27 12:09:16,102 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-27 12:09:16,103 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-27 12:09:16,472 [INFO] Bot de Grupos iniciado
+2025-05-27 12:12:49,792 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-27 12:12:49,793 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-27 12:12:50,073 [INFO] Bot de Grupos iniciado
+2025-05-27 12:13:15,009 [ERROR] Error en la selección de asignatura -1002674577362: CHECK constraint failed: Tipo_sala IN ('privada', 'pública')
+2025-05-27 12:18:48,747 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-27 12:18:48,748 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-27 12:18:49,079 [INFO] Bot de Grupos iniciado
+2025-05-27 12:36:50,639 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-27 12:36:50,640 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-27 12:36:50,928 [INFO] Bot de Grupos iniciado
+2025-05-27 12:40:27,901 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-27 12:40:27,901 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-27 12:40:28,175 [INFO] Bot de Grupos iniciado
+2025-05-27 12:50:47,579 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-27 12:50:47,579 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-27 12:50:47,859 [INFO] Bot de Grupos iniciado
+2025-05-27 12:56:18,083 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-27 12:56:18,084 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-27 12:56:18,412 [INFO] Bot de Grupos iniciado
+2025-05-27 12:56:44,053 [ERROR] Error en polling: 'sqlite3.Row' object has no attribute 'get'
+2025-05-27 12:57:49,049 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-27 12:57:49,050 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-27 12:57:49,349 [INFO] Bot de Grupos iniciado
+2025-05-27 13:29:37,674 [ERROR] Error en polling: ('Connection aborted.', ConnectionResetError(10054, 'Se ha forzado la interrupción de una conexión existente por el host remoto', None, 10054, None))
+2025-05-27 13:29:50,477 [ERROR] Error en polling: ('Connection aborted.', ConnectionResetError(10054, 'Se ha forzado la interrupción de una conexión existente por el host remoto', None, 10054, None))
+2025-05-27 13:47:53,570 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-05-27 13:47:53,570 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-05-27 13:47:53,915 [INFO] Bot de Grupos iniciado

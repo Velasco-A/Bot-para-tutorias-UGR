@@ -58,16 +58,15 @@ logger = configurar_logger()
 
 # Funciones de interfaz de usuario
 def menu_profesor():
-    """Crea un menú con botones específicos para profesores."""
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    """Devuelve un teclado personalizado para profesores en un grupo"""
+    # Crear un teclado personalizado con solo el botón de terminar tutoría
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+    
+    # Añadir solo el botón de terminar tutoría
     markup.add(
-        types.KeyboardButton("👨‍🎓 Ver estudiantes"),
-        types.KeyboardButton("📊 Ver Estadísticas")
+        types.KeyboardButton("❌ Terminar Tutoria")
     )
-    markup.add(
-        types.KeyboardButton("📝 Ver Valoraciones")
-    )
-    markup.add(types.KeyboardButton("❌ Terminar Tutoria"))
+    
     return markup
 
 def menu_estudiante():
