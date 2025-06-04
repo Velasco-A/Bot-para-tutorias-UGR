@@ -587,7 +587,7 @@ def handle_proposito_sala(call):
             tipo_sala = "privada"
             sala_tipo_texto = "Tutoría Privada"
             nuevo_nombre = f"Tutoría Privada - Prof. {data['id_usuario_profesor']}"
-            asignatura_id = "0"  # Indicando que no está vinculada a una asignatura específica
+            asignatura_id = "0"  # Indicando que no está vinculida a una asignatura específica
             
             descripcion = "Esta es tu sala de **tutorías privadas** donde solo pueden entrar estudiantes que invites específicamente."
         
@@ -799,58 +799,102 @@ def handle_terminar_tutoria(message):
                 
         elif user['Tipo'] == 'profesor':
             # CASO 2: PROFESOR - Mostrar lista de estudiantes para seleccionar
-            # Obtener lista de estudiantes activos en el grupo
-            cursor.execute("""
-                SELECT u.Id_usuario, u.Nombre, u.Apellidos, u.TelegramID
-                FROM Miembros_Grupo m
-                JOIN Usuarios u ON m.Id_usuario = u.Id_usuario
-                WHERE m.id_sala = ? AND u.Tipo = 'estudiante' AND m.Estado = 'activo'
-                ORDER BY u.Nombre
-            """, (sala_id,))
+            print(f"Profesor {user_id} solicitó lista de estudiantes en sala {sala_id}")
             
-            estudiantes = cursor.fetchall()
-            
-            if not estudiantes:
+            try:
+                # Obtener todos los miembros del chat que son estudiantes
+                # Primero verificamos que estudiantes están en la base de datos
+                cursor.execute("""
+                    SELECT u.Id_usuario, u.Nombre, u.Apellidos, u.TelegramID, m.id_miembro
+                    FROM Usuarios u
+                    LEFT JOIN Miembros_Grupo m ON u.Id_usuario = m.Id_usuario AND m.id_sala = ?
+                    WHERE u.Tipo = 'estudiante'
+                    AND u.TelegramID IS NOT NULL
+                    ORDER BY u.Nombre
+                """, (sala_id,))
+                
+                estudiantes = cursor.fetchall()
+                
+                # Verificar si hay estudiantes
+                if not estudiantes or len(estudiantes) == 0:
+                    bot.send_message(
+                        chat_id, 
+                        "📊 *No hay estudiantes registrados*\n\n"
+                        "No hay estudiantes para expulsar en esta tutoría.",
+                        parse_mode="Markdown"
+                    )
+                    conn.close()
+                    return
+                
+                # Crear un mensaje con la lista de estudiantes para seleccionar
+                mensaje = "👨‍🎓 *Selecciona el estudiante que ha terminado su tutoría:*\n\n"
+                mensaje += "El estudiante será baneado temporalmente (1 minuto) del grupo.\n\n"
+                
+                # Crear botones inline con los estudiantes
+                markup = types.InlineKeyboardMarkup(row_width=1)
+                
+                hay_estudiantes = False
+                
+                # Obtener los miembros actuales del chat
+                chat_members = []
+                try:
+                    chat_members = bot.get_chat_members_count(chat_id)
+                    print(f"Total miembros en el chat: {chat_members}")
+                except Exception as e:
+                    print(f"Error al obtener miembros del chat: {e}")
+                
+                # Solo mostrar estudiantes que están actualmente en el chat
+                for estudiante in estudiantes:
+                    nombre_completo = f"{estudiante['Nombre']} {estudiante['Apellidos'] or ''}".strip()
+                    telegram_id = estudiante['TelegramID']
+                    
+                    if telegram_id:
+                        try:
+                            # Verificar si el estudiante está en el chat
+                            miembro = bot.get_chat_member(chat_id, telegram_id)
+                            if miembro.status not in ['left', 'kicked']:
+                                # Estudiante presente en el chat
+                                hay_estudiantes = True
+                                callback_data = f"expulsar_{sala_id}_{estudiante['Id_usuario']}_{telegram_id}"
+                                markup.add(types.InlineKeyboardButton(
+                                    text=nombre_completo,
+                                    callback_data=callback_data
+                                ))
+                                print(f"Añadido estudiante {nombre_completo} a la lista")
+                        except Exception as e:
+                            print(f"Error verificando miembro {telegram_id}: {e}")
+                
+                # Añadir botón para cancelar
+                markup.add(types.InlineKeyboardButton(
+                    text="❌ Cancelar",
+                    callback_data="cancelar_expulsion"
+                ))
+                
+                if not hay_estudiantes:
+                    bot.send_message(
+                        chat_id, 
+                        "📊 *No hay estudiantes activos*\n\n"
+                        "No hay estudiantes activos en el chat para expulsar.",
+                        parse_mode="Markdown"
+                    )
+                else:
+                    # Enviar mensaje con opciones
+                    bot.send_message(
+                        chat_id,
+                        mensaje,
+                        reply_markup=markup,
+                        parse_mode="Markdown"
+                    )
+            except Exception as e:
+                print(f"Error procesando lista de estudiantes: {e}")
+                import traceback
+                traceback.print_exc()
                 bot.send_message(
-                    chat_id, 
-                    "📊 *No hay estudiantes*\n\n"
-                    "No hay estudiantes en esta tutoría para expulsar.",
+                    chat_id,
+                    "❌ Error al obtener la lista de estudiantes.",
                     parse_mode="Markdown"
                 )
-                conn.close()
-                return
             
-            # Crear un mensaje con la lista de estudiantes para seleccionar
-            mensaje = "👨‍🎓 *Selecciona el estudiante que ha terminado su tutoría:*\n\n"
-            mensaje += "El estudiante será baneado temporalmente (1 minuto) del grupo y podrá volver a entrar cuando necesite otra tutoría.\n\n"
-            
-            # Crear botones inline con los estudiantes
-            markup = types.InlineKeyboardMarkup(row_width=1)
-            
-            for estudiante in estudiantes:
-                nombre_completo = f"{estudiante['Nombre']} {estudiante['Apellidos'] or ''}".strip()
-                telegram_id = estudiante['TelegramID'] or '0'
-                # Incluir ID de usuario y TelegramID en el callback_data
-                callback_data = f"expulsar_{sala_id}_{estudiante['Id_usuario']}_{telegram_id}"
-                markup.add(types.InlineKeyboardButton(
-                    text=nombre_completo,
-                    callback_data=callback_data
-                ))
-            
-            # Añadir botón para cancelar
-            markup.add(types.InlineKeyboardButton(
-                text="❌ Cancelar",
-                callback_data="cancelar_expulsion"
-            ))
-            
-            # Enviar mensaje con opciones
-            bot.send_message(
-                chat_id,
-                mensaje,
-                reply_markup=markup,
-                parse_mode="Markdown"
-            )
-        
         conn.close()
         
     except Exception as e:
