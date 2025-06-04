@@ -141,7 +141,8 @@ def register_handlers(bot):
 
     def is_valid_email(email):
         """Verifica si el correo es válido (institucional UGR)"""
-        return re.match(r'.+@(correo\.)?ugr\.es$', email) is not None
+        #return re.match(r'.+@(correo\.)?ugr\.es$', email) is not None
+        return re.match(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$', email) is not None
     
     def verificar_correo_en_bd(email):
         """Verifica si el correo existe en la tabla Usuarios de la base de datos"""

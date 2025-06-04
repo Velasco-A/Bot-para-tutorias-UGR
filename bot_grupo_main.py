@@ -9,6 +9,7 @@ import time
 import os
 import sys
 import logging
+import sqlite3
 from dotenv import load_dotenv
 
 # Importar utilidades y handlers
@@ -707,222 +708,395 @@ def handle_ver_estudiantes_cmd(message):
 
 @bot.message_handler(func=lambda message: message.text == "❌ Terminar Tutoria")
 def handle_terminar_tutoria_cmd(message):
-    """Maneja el comando de terminar tutoría desde el teclado personalizado"""
-    chat_id = message.chat.id
-    user_id = message.from_user.id
-    
-    # Verificar que el usuario es profesor
-    user = get_user_by_telegram_id(user_id)
-    if not user or user['Tipo'] != 'profesor':
-        bot.send_message(chat_id, "⚠️ Solo los profesores pueden terminar la tutoría")
-        return
-    
-    # Obtener datos de la sala y sus miembros (estudiantes)
+    """Maneja cuando alguien pulsa el botón de terminar tutoría"""
     try:
+        chat_id = message.chat.id
+        user_id = message.from_user.id
+        
+        print(f"🔄 Botón 'Terminar Tutoria' pulsado por el usuario {user_id} en chat {chat_id}")
+        
+        # Verificamos que estamos en un grupo
+        if message.chat.type not in ['group', 'supergroup']:
+            bot.send_message(chat_id, "Este comando solo funciona en grupos de tutoría.")
+            return
+        
+        # Obtener información del usuario que pulsó
         conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        # Verificar que este chat es un grupo registrado
-        cursor.execute(
-            "SELECT id_sala, Tipo_sala FROM Grupos_tutoria WHERE Chat_id = ?", 
-            (str(chat_id),)
-        )
+        cursor.execute("SELECT * FROM Usuarios WHERE TelegramID = ?", (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            bot.send_message(chat_id, "❌ No estás registrado en el sistema.")
+            conn.close()
+            return
+        
+        # Obtener información de la sala
+        cursor.execute("""
+            SELECT * FROM Grupos_tutoria WHERE Chat_id = ? AND Proposito_sala = 'individual'
+        """, (str(chat_id),))
+        
         sala = cursor.fetchone()
         
         if not sala:
-            bot.send_message(chat_id, "⚠️ Este grupo no está configurado como sala de tutoría")
             conn.close()
             return
             
         sala_id = sala['id_sala']
-        tipo_sala = sala['Tipo_sala']
         
-        # Obtener lista de estudiantes activos en el grupo
-        cursor.execute("""
-            SELECT u.Id_usuario, u.Nombre, u.Apellidos, u.TelegramID
-            FROM Miembros_Grupo m
-            JOIN Usuarios u ON m.Id_usuario = u.Id_usuario
-            WHERE m.id_sala = ? AND u.Tipo = 'alumno' AND m.Estado = 'activo'
-            ORDER BY u.Nombre
-        """, (sala_id,))
-        
-        estudiantes = cursor.fetchall()
-        conn.close()
-        
-        if not estudiantes:
+        # Comportamiento diferente según el tipo de usuario
+        if user['Tipo'] == 'estudiante':
+            # CASO 1: ESTUDIANTE - Expulsar al estudiante directamente
+            nombre_completo = f"{user['Nombre']} {user['Apellidos'] or ''}".strip()
+            
+            # Actualizar estado en la base de datos
+            cursor.execute("""
+                UPDATE Miembros_Grupo 
+                SET Estado = 'pausado' 
+                WHERE id_sala = ? AND Id_usuario = ?
+            """, (sala_id, user['Id_usuario']))
+            conn.commit()
+            
+            # Mensaje de despedida
             bot.send_message(
                 chat_id, 
-                "📊 *No hay estudiantes*\n\nNo hay estudiantes activos en esta tutoría para expulsar.",
+                f"👋 *Tutoría finalizada*\n\n"
+                f"El estudiante {nombre_completo} ha finalizado su tutoría.\n"
+                f"¡Gracias por utilizar el sistema de tutorías!",
                 parse_mode="Markdown"
             )
-            return
-        
-        # Crear un mensaje con la lista de estudiantes para seleccionar
-        mensaje = "👨‍🎓 *Selecciona el estudiante que ha terminado su tutoría:*\n\n"
-        mensaje += "El estudiante será expulsado temporalmente (1 minuto) del grupo y podrá volver a entrar cuando necesite otra tutoría.\n\n"
-        
-        # Crear botones inline con los estudiantes
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        
-        for estudiante in estudiantes:
-            nombre_completo = f"{estudiante['Nombre']} {estudiante['Apellidos'] or ''}".strip()
-            # Incluir ID de usuario y TelegramID en el callback_data
-            callback_data = f"expulsar_{sala_id}_{estudiante['Id_usuario']}_{estudiante['TelegramID'] or '0'}"
             
-            markup.add(types.InlineKeyboardButton(
-                f"👤 {nombre_completo}",
-                callback_data=callback_data
-            ))
-        
-        # Botón para cancelar
-        markup.add(types.InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_expulsion"))
-        
-        # Enviar mensaje con las opciones
-        bot.send_message(
-            chat_id,
-            mensaje,
-            reply_markup=markup,
-            parse_mode="Markdown"
-        )
-        
-    except Exception as e:
-        bot.send_message(chat_id, f"❌ Error al procesar la solicitud: {str(e)}")
-        import traceback
-        print(f"Error en terminar tutoría: {e}")
-        print(traceback.format_exc())
-
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("expulsar_"))
-def handle_expulsar_estudiante(call):
-    """Maneja la expulsión temporal de un estudiante del grupo"""
-    chat_id = call.message.chat.id
-    message_id = call.message.message_id
-    
-    # Parsear datos del callback
-    partes = call.data.split("_")
-    sala_id = int(partes[1])
-    estudiante_id = int(partes[2])
-    estudiante_telegram_id = partes[3]
-    
-    # Prevenir errores si el ID de Telegram es '0' (nulo)
-    if estudiante_telegram_id == '0':
-        estudiante_telegram_id = None
-    
-    # Verificar que el usuario es profesor
-    user = get_user_by_telegram_id(call.from_user.id)
-    if not user or user['Tipo'] != 'profesor':
-        bot.answer_callback_query(call.id, "⚠️ No tienes permisos para esta acción")
-        return
-    
-    try:
-        # Obtener información del estudiante y la sala
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Obtener datos del estudiante
-        cursor.execute(
-            "SELECT Nombre, Apellidos FROM Usuarios WHERE Id_usuario = ?", 
-            (estudiante_id,)
-        )
-        estudiante = cursor.fetchone()
-        
-        if not estudiante:
-            bot.answer_callback_query(call.id, "⚠️ No se encontró el estudiante")
-            conn.close()
-            return
-            
-        nombre_completo = f"{estudiante['Nombre']} {estudiante['Apellidos'] or ''}".strip()
-        
-        # Actualizar la tabla Miembros_Grupo para cambiar el estado del estudiante
-        cursor.execute(
-            "UPDATE Miembros_Grupo SET Estado = 'pausado' WHERE id_sala = ? AND Id_usuario = ?",
-            (sala_id, estudiante_id)
-        )
-        conn.commit()
-        conn.close()
-        
-        # Función auxiliar para escapar caracteres markdown
-        def escape_markdown(text):
-            if not text:
-                return ""
-            chars = ['_', '*', '`', '[', ']', '(', ')', '#', '+', '-', '.', '!']
-            for char in chars:
-                text = text.replace(char, '\\' + char)
-            return text
-        
-        # Intentar expulsar al estudiante del grupo de Telegram con ban de 1 minuto (60 segundos)
-        if estudiante_telegram_id:
+            # Expulsar temporalmente al estudiante (1 minuto)
             try:
-                import time
-                tiempo_ban = 60  # Ban de 1 minuto (60 segundos)
-                bot.ban_chat_member(chat_id, estudiante_telegram_id, until_date=int(time.time() + tiempo_ban))
-                print(f"✅ Estudiante {estudiante_telegram_id} expulsado temporalmente del grupo {chat_id}")
+                # Calcular tiempo de expulsión (1 minuto desde ahora)
+                tiempo_expulsion = int(time.time() + 60)  # 60 segundos
                 
-                # Enviar mensaje de confirmación
-                bot.edit_message_text(
-                    f"✅ *Tutoría finalizada*\n\n"
-                    f"El estudiante *{escape_markdown(nombre_completo)}* ha sido expulsado temporalmente del grupo.\n"
-                    f"Podrá volver a unirse después de 1 minuto.",
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    parse_mode="Markdown"
-                )
+                # Intentar expulsar
+                bot.ban_chat_member(chat_id, user_id, until_date=tiempo_expulsion)
+                print(f"✅ Usuario {user_id} expulsado del grupo {chat_id} por 1 minuto")
                 
-                # Enviar mensaje al estudiante si es posible
+                # Notificar al estudiante por mensaje privado
                 try:
                     bot.send_message(
-                        estudiante_telegram_id,
-                        f"ℹ️ *Tutoría finalizada*\n\n"
-                        f"Tu tutoría ha concluido y has sido temporalmente removido del grupo.\n"
-                        f"Podrás volver a unirte después de 1 minuto si necesitas otra consulta.",
+                        user_id,
+                        "✅ *Tutoría finalizada correctamente*\n\n"
+                        "Has sido expulsado temporalmente del grupo de tutoría.\n"
+                        "Podrás volver a entrar para una nueva tutoría después de 1 minuto.",
                         parse_mode="Markdown"
                     )
                 except Exception as e:
-                    print(f"Error al enviar mensaje al estudiante: {e}")
+                    print(f"Error al enviar mensaje privado: {e}")
             except Exception as e:
-                print(f"Error al expulsar estudiante: {e}")
-                bot.edit_message_text(
-                    f"⚠️ *No se pudo expulsar al estudiante*\n\n"
-                    f"La tutoría con *{escape_markdown(nombre_completo)}* ha sido registrada como finalizada,\n"
-                    f"pero no se pudo expulsar al estudiante del grupo automáticamente.",
-                    chat_id=chat_id,
-                    message_id=message_id,
+                print(f"Error al expulsar usuario: {e}")
+                bot.send_message(
+                    chat_id,
+                    "⚠️ No se pudo expulsar automáticamente al estudiante.\n"
+                    "Por favor, verifica los permisos del bot en el grupo.",
                     parse_mode="Markdown"
                 )
-        else:
-            # No tenemos ID de Telegram del estudiante
-            bot.edit_message_text(
-                f"⚠️ *No se pudo expulsar al estudiante*\n\n"
-                f"No se encontró el ID de Telegram para *{escape_markdown(nombre_completo)}*.\n"
-                f"La tutoría ha sido registrada como finalizada, pero deberás expulsar al estudiante manualmente.",
-                chat_id=chat_id,
-                message_id=message_id,
+                
+        elif user['Tipo'] == 'profesor':
+            # CASO 2: PROFESOR - Mostrar lista de estudiantes para seleccionar
+            # Obtener lista de estudiantes activos en el grupo
+            cursor.execute("""
+                SELECT u.Id_usuario, u.Nombre, u.Apellidos, u.TelegramID
+                FROM Miembros_Grupo m
+                JOIN Usuarios u ON m.Id_usuario = u.Id_usuario
+                WHERE m.id_sala = ? AND u.Tipo = 'estudiante' AND m.Estado = 'activo'
+                ORDER BY u.Nombre
+            """, (sala_id,))
+            
+            estudiantes = cursor.fetchall()
+            
+            if not estudiantes:
+                bot.send_message(
+                    chat_id, 
+                    "📊 *No hay estudiantes*\n\nNo hay estudiantes activos en esta tutoría para expulsar.",
+                    parse_mode="Markdown"
+                )
+                conn.close()
+                return
+            
+            # Crear un mensaje con la lista de estudiantes para seleccionar
+            mensaje = "👨‍🎓 *Selecciona el estudiante que ha terminado su tutoría:*\n\n"
+            mensaje += "El estudiante será expulsado temporalmente (1 minuto) del grupo y podrá volver a entrar cuando necesite otra tutoría.\n\n"
+            
+            # Crear botones inline con los estudiantes
+            markup = types.InlineKeyboardMarkup(row_width=1)
+            
+            for estudiante in estudiantes:
+                nombre_completo = f"{estudiante['Nombre']} {estudiante['Apellidos'] or ''}".strip()
+                # Incluir ID de usuario y TelegramID en el callback_data
+                callback_data = f"expulsar_{sala_id}_{estudiante['Id_usuario']}_{estudiante['TelegramID'] or '0'}"
+                
+                # Verificar que callback_data no exceda 64 bytes
+                if len(callback_data) > 64:
+                    # Si excede, usar solo el ID sin nombre
+                    callback_data = f"expulsar_{sala_id}_{estudiante['Id_usuario']}_{estudiante['TelegramID'] or '0'}"
+                
+                markup.add(types.InlineKeyboardButton(
+                    text=nombre_completo,
+                    callback_data=callback_data
+                ))
+            
+            # Añadir botón para cancelar
+            markup.add(types.InlineKeyboardButton(
+                text="❌ Cancelar",
+                callback_data="cancelar_expulsion"
+            ))
+            
+            # Enviar mensaje con opciones
+            bot.send_message(
+                chat_id,
+                mensaje,
+                reply_markup=markup,
                 parse_mode="Markdown"
             )
         
+        conn.close()
+        
     except Exception as e:
-        bot.edit_message_text(
-            f"❌ Error al expulsar estudiante: {str(e)}",
-            chat_id=chat_id,
-            message_id=message_id
-        )
+        print(f"Error en handle_terminar_tutoria: {e}")
         import traceback
-        print(f"Error al expulsar estudiante: {e}")
-        print(traceback.format_exc())
-    
-    bot.answer_callback_query(call.id)
+        traceback.print_exc()
+        bot.send_message(chat_id, "❌ Ocurrió un error al procesar tu solicitud.")
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("expulsar_"))
+def handle_expulsar_callback(call):
+    """Maneja la selección del estudiante a expulsar por parte del profesor"""
+    try:
+        chat_id = call.message.chat.id
+        user_id = call.from_user.id
+        
+        # Verificar que el usuario es profesor
+        conn = get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM Usuarios WHERE TelegramID = ?", (user_id,))
+        profesor = cursor.fetchone()
+        
+        if not profesor or profesor['Tipo'] != 'profesor':
+            bot.answer_callback_query(call.id, "❌ Solo los profesores pueden expulsar estudiantes.")
+            conn.close()
+            return
+        
+        # Extraer datos del callback
+        datos = call.data.split('_')
+        if len(datos) < 4:
+            bot.answer_callback_query(call.id, "❌ Datos incorrectos.")
+            conn.close()
+            return
+            
+        sala_id = int(datos[1])
+        estudiante_id = int(datos[2])
+        telegram_id = int(datos[3]) if datos[3] != '0' else None
+        
+        # Verificar que el estudiante existe
+        cursor.execute("SELECT * FROM Usuarios WHERE Id_usuario = ?", (estudiante_id,))
+        estudiante = cursor.fetchone()
+        
+        if not estudiante:
+            bot.answer_callback_query(call.id, "❌ Estudiante no encontrado.")
+            conn.close()
+            return
+        
+        # Actualizar estado del estudiante en la base de datos
+        cursor.execute("""
+            UPDATE Miembros_Grupo 
+            SET Estado = 'pausado' 
+            WHERE id_sala = ? AND Id_usuario = ?
+        """, (sala_id, estudiante_id))
+        conn.commit()
+        
+        # Nombre completo del estudiante
+        nombre_completo = f"{estudiante['Nombre']} {estudiante['Apellidos'] or ''}".strip()
+        
+        # Mensaje de confirmación
+        bot.edit_message_text(
+            f"✅ *Expulsando a {nombre_completo}*\n\n"
+            f"El estudiante ha sido expulsado temporalmente de la tutoría.",
+            chat_id=chat_id,
+            message_id=call.message.message_id,
+            parse_mode="Markdown"
+        )
+        
+        # Si tenemos el Telegram ID, intentar expulsar
+        if telegram_id:
+            try:
+                # Expulsar por 1 minuto
+                tiempo_expulsion = int(time.time() + 60)
+                bot.ban_chat_member(chat_id, telegram_id, until_date=tiempo_expulsion)
+                print(f"✅ Estudiante {telegram_id} expulsado del grupo {chat_id} por 1 minuto")
+                
+                # Notificar al estudiante
+                try:
+                    bot.send_message(
+                        telegram_id,
+                        "✅ *Tutoría finalizada por el profesor*\n\n"
+                        "El profesor ha finalizado tu sesión de tutoría.\n"
+                        "Has sido expulsado temporalmente del grupo y podrás volver a entrar después de 1 minuto.",
+                        parse_mode="Markdown"
+                    )
+                except Exception:
+                    pass  # Ignorar si no se puede enviar mensaje privado
+                    
+            except Exception as e:
+                print(f"Error al expulsar estudiante: {e}")
+                bot.send_message(
+                    chat_id,
+                    "⚠️ No se pudo expulsar al estudiante. Verifica los permisos del bot.",
+                    parse_mode="Markdown"
+                )
+        
+        conn.close()
+        bot.answer_callback_query(call.id)
+        
+    except Exception as e:
+        print(f"Error en handle_expulsar_callback: {e}")
+        import traceback
+        traceback.print_exc()
+        try:
+            bot.answer_callback_query(call.id, "❌ Error al procesar la acción.")
+        except:
+            pass
 
 
 @bot.callback_query_handler(func=lambda call: call.data == "cancelar_expulsion")
 def handle_cancelar_expulsion(call):
-    """Cancela la operación de expulsión"""
-    bot.edit_message_text(
-        "❌ Operación cancelada. No se ha expulsado a ningún estudiante.",
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id
-    )
-    bot.answer_callback_query(call.id)
+    """Cancela la expulsión de estudiantes"""
+    try:
+        bot.edit_message_text(
+            "❌ *Operación cancelada*\n\nNo se ha expulsado a ningún estudiante.",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="Markdown"
+        )
+        bot.answer_callback_query(call.id)
+    except Exception as e:
+        print(f"Error en handle_cancelar_expulsion: {e}")
+        try:
+            bot.answer_callback_query(call.id, "❌ Error al cancelar.")
+        except:
+            pass
     
+
+# Añadir este manejador después de los otros handlers, antes de if __name__ == "__main__":
+
+# Manejador para nuevos miembros del grupo
+@bot.chat_join_request_handler()
+def handle_join_request(join_request):
+    try:
+        chat_id = join_request.chat.id
+        user_id = join_request.from_user.id
+        bot.approve_chat_join_request(chat_id, user_id)
+    except Exception as e:
+        print(f"Error al aprobar solicitud de unión: {e}")
+
+@bot.message_handler(content_types=['new_chat_members'])
+def handle_new_chat_members(message):
+    """Maneja cuando un nuevo miembro se une al grupo"""
+    try:
+        chat_id = message.chat.id
+        for new_member in message.new_chat_members:
+            user_id = new_member.id
+            
+            # Ignorar si es el propio bot
+            if user_id == bot.get_me().id:
+                return
+                
+            # Obtener información del usuario
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Verificar si el grupo es un grupo de tutorías registrado
+            cursor.execute("""
+                SELECT * FROM Grupos_tutoria WHERE Chat_id = ?
+            """, (str(chat_id),))
+            
+            grupo = cursor.fetchone()
+            
+            if not grupo:
+                # No es un grupo registrado
+                conn.close()
+                return
+                
+            # Comprobar si el usuario está registrado
+            cursor.execute("SELECT * FROM Usuarios WHERE TelegramID = ?", (user_id,))
+            usuario = cursor.fetchone()
+            
+            if not usuario:
+                # Usuario no registrado - enviar mensaje informativo
+                bot.send_message(
+                    chat_id, 
+                    f"👋 Bienvenido/a nuevo usuario.\n\n"
+                    f"Para poder participar completamente en este grupo, primero debes registrarte "
+                    f"con el bot principal @TuBotPrincipal.",
+                    parse_mode="Markdown"
+                )
+                conn.close()
+                return
+            
+            # Usuario registrado
+            nombre_completo = f"{usuario['Nombre']} {usuario['Apellidos'] or ''}".strip()
+            tipo_usuario = usuario['Tipo']
+            
+            print(f"Nuevo miembro en grupo {chat_id}: {nombre_completo} ({tipo_usuario})")
+            
+            # Mensaje de bienvenida personalizado según el tipo de usuario
+            if tipo_usuario == 'estudiante':
+                # Enviar mensaje de bienvenida para estudiantes
+                mensaje = (
+                    f"👋 ¡Bienvenido/a *{nombre_completo}*!\n\n"
+                    f"Te has unido a una sala de tutoría. Cuando finalices tu consulta, "
+                    f"pulsa el botón '❌ Terminar Tutoria' para salir."
+                )
+                
+                # Registrar al estudiante en la base de datos
+                try:
+                    # Solo si es un grupo de tutorías individuales
+                    if grupo['Proposito_sala'] == 'individual':
+                        cursor.execute("""
+                            INSERT INTO Miembros_Grupo (id_sala, Id_usuario, Fecha_union, Estado)
+                            VALUES (?, ?, CURRENT_TIMESTAMP, 'activo')
+                        """, (grupo['id_sala'], usuario['Id_usuario']))
+                        conn.commit()
+                except Exception as e:
+                    print(f"Error al registrar estudiante en grupo: {e}")
+                
+                # Enviar mensaje con botón
+                bot.send_message(
+                    chat_id, 
+                    mensaje,
+                    reply_markup=menu_estudiante(),
+                    parse_mode="Markdown"
+                )
+                
+            elif tipo_usuario == 'profesor':
+                # Enviar mensaje de bienvenida para profesores
+                mensaje = (
+                    f"👨‍🏫 ¡Bienvenido/a Profesor/a *{nombre_completo}*!\n\n"
+                    f"Este es tu grupo de tutorías. Para expulsar a un estudiante cuando termine "
+                    f"su consulta, usa el botón '❌ Terminar Tutoria'."
+                )
+                
+                bot.send_message(
+                    chat_id, 
+                    mensaje,
+                    reply_markup=menu_profesor(),
+                    parse_mode="Markdown"
+                )
+            
+            conn.close()
+            
+    except Exception as e:
+        print(f"Error al dar la bienvenida a nuevo miembro: {e}")
+        import traceback
+        traceback.print_exc()
+
 if __name__ == "__main__":
     # Verificar que existe la base de datos
     if not os.path.exists(os.path.join(base_dir, "tutoria_ugr.db")):

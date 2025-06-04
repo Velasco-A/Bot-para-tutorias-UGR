@@ -191,3 +191,98 @@
 2025-05-27 13:47:53,570 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
 2025-05-27 13:47:53,570 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
 2025-05-27 13:47:53,915 [INFO] Bot de Grupos iniciado
+2025-05-27 14:30:58,729 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)
+2025-05-27 14:51:24,506 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Max retries exceeded with url: /bot8181887445:AAEyz41t9PKxHOP3taANs2n-UwANvNZ7sTA/getUpdates?offset=208821582&timeout=20 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x00000130FC1BCE10>: Failed to resolve 'api.telegram.org' ([Errno 11001] getaddrinfo failed)"))
+2025-05-27 14:51:45,599 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Max retries exceeded with url: /bot8181887445:AAEyz41t9PKxHOP3taANs2n-UwANvNZ7sTA/getUpdates?offset=208821582&timeout=20 (Caused by NameResolutionError("<urllib3.connection.HTTPSConnection object at 0x00000130FC1BD6D0>: Failed to resolve 'api.telegram.org' ([Errno 11001] getaddrinfo failed)"))
+2025-05-27 16:31:28,263 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)
+2025-05-27 19:29:20,786 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)
+2025-05-27 23:08:37,337 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)
+2025-06-03 16:31:34,410 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-03 16:31:34,410 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-03 16:31:34,828 [INFO] Bot de Grupos iniciado
+2025-06-03 17:46:38,711 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)
+2025-06-03 19:01:34,443 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)
+2025-06-03 19:12:34,811 [ERROR] Error en polling: ('Connection aborted.', ConnectionResetError(10054, 'Se ha forzado la interrupción de una conexión existente por el host remoto', None, 10054, None))
+2025-06-03 19:28:49,450 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)
+2025-06-03 19:44:43,901 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)
+2025-06-03 20:11:03,443 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)
+2025-06-03 20:24:40,349 [ERROR] Error en polling: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)
+2025-06-04 09:41:19,108 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 09:41:19,108 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 09:41:19,469 [INFO] Bot de Grupos iniciado
+2025-06-04 09:56:28,595 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 09:56:28,595 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 09:56:28,965 [INFO] Bot de Grupos iniciado
+2025-06-04 10:00:53,824 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 10:00:53,824 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 10:00:54,107 [INFO] Bot de Grupos iniciado
+2025-06-04 10:03:57,918 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 10:03:57,918 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 10:03:58,451 [INFO] Bot de Grupos iniciado
+2025-06-04 10:11:41,045 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 10:11:41,045 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 10:11:41,303 [INFO] Bot de Grupos iniciado
+2025-06-04 10:12:32,860 [INFO] Usuario 8094743206 (clara ) ha iniciado el bot en chat -1002626583678
+2025-06-04 10:12:32,998 [INFO] Interfaz de estudiante configurada para usuario 8094743206
+2025-06-04 10:22:56,759 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 10:22:56,759 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 10:22:57,023 [INFO] Bot de Grupos iniciado
+2025-06-04 10:26:20,489 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 10:26:20,489 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 10:26:20,808 [INFO] Bot de Grupos iniciado
+2025-06-04 10:26:26,605 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 10:26:26,605 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 10:26:26,850 [INFO] Bot de Grupos iniciado
+2025-06-04 10:28:26,350 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 10:28:26,350 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 10:28:26,733 [INFO] Bot de Grupos iniciado
+2025-06-04 10:31:17,380 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 10:31:17,381 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 10:31:17,673 [INFO] Bot de Grupos iniciado
+2025-06-04 10:42:16,597 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 10:42:16,598 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 10:42:16,892 [INFO] Bot de Grupos iniciado
+2025-06-04 10:46:04,615 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 10:46:04,616 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 10:46:04,974 [INFO] Bot de Grupos iniciado
+2025-06-04 10:46:10,998 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 10:46:10,999 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 10:46:11,250 [INFO] Bot de Grupos iniciado
+2025-06-04 11:24:46,501 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 11:24:46,501 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 11:24:46,814 [INFO] Bot de Grupos iniciado
+2025-06-04 11:25:03,444 [ERROR] Error en polling: no such column: a.id
+2025-06-04 11:25:20,777 [INFO] Usuario 8094743206 (clara ) ha iniciado el bot en chat -1002665574112
+2025-06-04 11:25:20,918 [INFO] Interfaz de estudiante configurada para usuario 8094743206
+2025-06-04 11:26:22,647 [ERROR] Error en polling: no such column: a.id
+2025-06-04 11:26:26,949 [INFO] Usuario 8094743206 (clara ) ha iniciado el bot en chat -1002626583678
+2025-06-04 11:26:27,105 [INFO] Interfaz de estudiante configurada para usuario 8094743206
+2025-06-04 11:44:40,848 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 11:44:40,848 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 11:44:41,229 [INFO] Bot de Grupos iniciado
+2025-06-04 12:06:38,143 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 12:06:38,144 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 12:06:38,405 [INFO] Bot de Grupos iniciado
+2025-06-04 12:06:42,601 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 12:06:42,601 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 12:06:42,850 [INFO] Bot de Grupos iniciado
+2025-06-04 12:07:38,072 [INFO] Usuario 8094743206 (clara ) ha iniciado el bot en chat -1002669384579
+2025-06-04 12:07:38,364 [INFO] Interfaz de estudiante configurada para usuario 8094743206
+2025-06-04 12:16:12,341 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 12:16:12,342 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 12:16:12,646 [INFO] Bot de Grupos iniciado
+2025-06-04 12:20:56,574 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 12:20:56,574 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 12:20:56,882 [INFO] Bot de Grupos iniciado
+2025-06-04 12:25:17,976 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 12:25:17,976 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 12:25:18,261 [INFO] Bot de Grupos iniciado
+2025-06-04 12:30:27,164 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 12:30:27,164 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 12:30:27,470 [INFO] Bot de Grupos iniciado
+2025-06-04 13:12:51,867 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 13:12:51,867 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 13:12:52,181 [INFO] Bot de Grupos iniciado
+2025-06-04 13:20:05,750 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
+2025-06-04 13:20:05,750 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-04 13:20:06,035 [INFO] Bot de Grupos iniciado

@@ -481,6 +481,20 @@ def get_horarios_profesor(profesor_id):
     finally:
         conn.close()
 
+def verificar_disponibilidad_profesor(profesor_id):
+    """Verifica si un profesor está disponible actualmente según su horario"""
+    from handlers.tutorias import verificar_horario_tutoria
+    
+    # Obtener horario del profesor
+    horario = get_horarios_profesor(profesor_id)
+    
+    # Si no hay horario registrado, asumir no disponible
+    if not horario:
+        return False
+        
+    # Verificar si estamos en horario de tutoría
+    return verificar_horario_tutoria(horario)
+
 # ===== ASIGNATURAS Y CARRERAS =====
 def get_o_crear_carrera(nombre_carrera):
     """Obtiene una carrera por nombre o la crea si no existe"""
@@ -609,3 +623,45 @@ def crear_matricula(id_usuario, id_asignatura, tipo_usuario='estudiante', verifi
         return False
     finally:
         conn.close()
+
+def get_salas_profesor_asignatura(profesor_id, asignatura_id):
+    """
+    Obtiene las salas de tutoría de un profesor para una asignatura específica
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT g.*, u.Nombre as NombreProfesor 
+        FROM Grupos_tutoria g
+        JOIN Usuarios u ON g.Id_usuario = u.Id_usuario
+        WHERE g.Id_usuario = ? AND (g.Id_asignatura = ? OR g.Id_asignatura IS NULL)
+        ORDER BY g.Proposito_sala ASC
+    """, (profesor_id, asignatura_id))
+    
+    salas = cursor.fetchall()
+    conn.close()
+    
+    return salas if salas else []
+
+
+def get_profesores_asignatura(asignatura_id):
+    """
+    Obtiene todos los profesores que imparten una asignatura específica
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT DISTINCT u.*
+        FROM Usuarios u
+        JOIN Matriculas m ON u.Id_usuario = m.Id_usuario
+        WHERE m.Id_asignatura = ? 
+        AND u.Tipo = 'profesor' 
+        AND m.Tipo = 'docente'
+    """, (asignatura_id,))
+    
+    profesores = cursor.fetchall()
+    conn.close()
+    
+    return profesores if profesores else []

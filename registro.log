@@ -49,3 +49,9 @@
 2025-05-23 18:12:04,633 [INFO] Usuario alb172@correo.ugr.es verificado correctamente. TelegramID actualizado.
 2025-05-23 18:20:28,163 [INFO] TOKEN DE VERIFICACIÓN enviado a alb172@correo.ugr.es: 609474
 2025-05-23 18:20:33,505 [INFO] Usuario alb172@correo.ugr.es verificado correctamente. TelegramID actualizado.
+2025-05-31 19:15:43,281 [INFO] TOKEN DE VERIFICACIÓN enviado a joseravelgar@gmail.com: 411577
+2025-05-31 19:15:55,257 [INFO] Usuario joseravelgar@gmail.com verificado correctamente. TelegramID actualizado.
+2025-05-31 19:15:55,337 [ERROR] Error al enviar mensaje de bienvenida: cannot import name 'enviar_mensaje_bienvenida' from 'main' (c:\Users\Alberto\Desktop\TFG_V2\main.py)
+2025-06-01 12:52:40,194 [INFO] TOKEN DE VERIFICACIÓN enviado a velascofuentesclara@gmail.com: 774546
+2025-06-01 12:52:56,134 [INFO] Usuario velascofuentesclara@gmail.com verificado correctamente. TelegramID actualizado.
+2025-06-01 12:52:56,219 [ERROR] Error al enviar mensaje de bienvenida: cannot import name 'enviar_mensaje_bienvenida' from 'main' (c:\Users\Alberto\Desktop\TFG_V2\main.py)

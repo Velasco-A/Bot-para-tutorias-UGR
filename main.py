@@ -1386,8 +1386,15 @@ def setup_polling():
         else:
             print("⚠️ Error al configurar comandos")
         
-        # Iniciar polling en modo no stop
-        bot.infinity_polling(timeout=10, long_polling_timeout=5)
+        # Agregar esta línea:
+        print("⚙️ Configurando polling con eventos de grupo...")
+        
+        # Modificar esta línea:
+        bot.infinity_polling(
+            timeout=10, 
+            long_polling_timeout=5,
+            allowed_updates=["message", "callback_query", "my_chat_member", "chat_member"]
+        )
     except KeyboardInterrupt:
         print("👋 Bot detenido manualmente")
         sys.exit(0)

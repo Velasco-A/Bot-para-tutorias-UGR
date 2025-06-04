@@ -1,8 +1,16 @@
-import sqlite3
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CallbackContext, ConversationHandler, CommandHandler, CallbackQueryHandler, MessageHandler, filters
-import logging
+import sys
+import os
+# Añadir el directorio raíz al path para importar desde db
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from db.queries import get_db_connection
+
 import time
+import sqlite3
+import traceback
+from telebot import types
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import CallbackContext, ConversationHandler, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ChatMemberHandler
+import logging
 
 # Estados para el flujo de conversación
 ELEGIR_TIPO = 1
@@ -955,7 +963,7 @@ class GestionGrupos:
         
         return ConversationHandler.END
 
-    def registrar_handlers(self, dp):
+    def registrar_handlers(self, dispatcher):
         """Registra los handlers necesarios para la gestión de grupos"""
         # Handler para cuando el bot es añadida al grupo
         conv_handler = ConversationHandler(
@@ -970,7 +978,7 @@ class GestionGrupos:
             },
             fallbacks=[]
         )
-        dp.add_handler(conv_handler)
+        dispatcher.add_handler(conv_handler)
         
         # Handler para el comando /finalizar (usado tanto por profesores como por alumnos)
         finalizar_handler = ConversationHandler(
@@ -986,7 +994,7 @@ class GestionGrupos:
             },
             fallbacks=[CommandHandler('cancelar', lambda u, c: ConversationHandler.END)]
         )
-        dp.add_handler(finalizar_handler)
+        dispatcher.add_handler(finalizar_handler)
         
         # Handler para cambiar asignatura de sala
         cambiar_asignatura_handler = ConversationHandler(
@@ -1000,7 +1008,7 @@ class GestionGrupos:
             },
             fallbacks=[CommandHandler('cancelar', lambda u, c: ConversationHandler.END)]
         )
-        dp.add_handler(cambiar_asignatura_handler)
+        dispatcher.add_handler(cambiar_asignatura_handler)
         
         # Handler para eliminar sala
         eliminar_sala_handler = ConversationHandler(
@@ -1016,594 +1024,259 @@ class GestionGrupos:
             },
             fallbacks=[CommandHandler('cancelar', lambda u, c: ConversationHandler.END)]
         )
-        dp.add_handler(eliminar_sala_handler)
+        dispatcher.add_handler(eliminar_sala_handler)
+
+        # Añadir handler para expulsar miembros no registrados
+        dispatcher.add_handler(ChatMemberHandler(self.filtrar_miembros_no_registrados, ChatMemberHandler.CHAT_MEMBER))
 
 def register_handlers(bot):
-    """Registra los handlers para integrarse con el sistema principal"""
-    # Enfoque simplificado para obtener la ruta de la base de datos
-    import os
-    from pathlib import Path
-    
-    # Buscar el archivo de base de datos en ubicaciones comunes
-    base_dir = Path(__file__).parent.parent.absolute()
-    posibles_rutas = [
-        os.path.join(base_dir, "tutoria_ugr.db"),  # raíz del proyecto
-        os.path.join(base_dir, "db", "tutoria_ugr.db"),  # carpeta db
-        "tutoria_ugr.db"  # relativa al directorio actual
-    ]
-    
-    db_path = None
-    for ruta in posibles_rutas:
-        if os.path.exists(ruta):
-            db_path = ruta
-            break
-            
-    if db_path is None:
-        # Si no encontramos la BD, usar ruta por defecto y advertir
-        db_path = os.path.join(base_dir, "tutoria_ugr.db")
-        print(f"⚠️ ADVERTENCIA: No se pudo encontrar la base de datos. Usando: {db_path}")
-    
-    # Importar las dependencias necesarias para el manejo de grupos
-    from telebot import types
-    import time
-    import sqlite3
-    import logging
-    
-    # Configurar logger
-    logger = logging.getLogger(__name__)
-    
-    # Importar funciones comunes
-    from db.queries import get_db_connection, get_user_by_telegram_id
-    from utils.state_manager import user_states, user_data, set_state, get_state, clear_state
-    
-    # Crear instancia de GestionGrupos
-    gestor = GestionGrupos(db_path)
-    
+    # ... código existente ...
+
     # Manejador para el botón de finalizar tutoría
     @bot.message_handler(func=lambda message: message.text == "❌ Terminar Tutoria")
-    def handle_keyboard_finalizar(message):
-        """Maneja el botón de finalizar tutoría del teclado"""
-        chat_id = message.chat.id
-        user_id = message.from_user.id
-        
-        # Verificar que estamos en un grupo
-        if message.chat.type not in ['group', 'supergroup']:
-            bot.reply_to(message, "Este comando solo funciona en grupos de tutoría.")
-            return
-        
-        # Verificar que el grupo es una sala de tutoría
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM Grupos_tutoria WHERE Chat_id = ?", (str(chat_id),))
-        grupo = cursor.fetchone()
-        conn.close()
-        
-        if not grupo:
-            bot.reply_to(message, "Este grupo no está registrado como sala de tutoría.")
-            return
-        
-        # Verificar tipo de usuario
-        user = get_user_by_telegram_id(user_id)
-        if not user:
-            bot.reply_to(message, "No se pudo identificar al usuario.")
-            return
-        
-        # Dirigir al comando /finalizar para ambos tipos de usuario
-        message.text = "/finalizar"
-        bot.process_new_messages([message])
-    
-    # Registrar handler de finalización
-    @bot.message_handler(commands=['finalizar'])
-    def finalizar_command(message):
-        # Crear un objeto Update para simular el comportamiento de python-telegram-bot
-        from collections import namedtuple
-        EffectiveUser = namedtuple('EffectiveUser', ['id', 'first_name', 'last_name'])
-        EffectiveChat = namedtuple('EffectiveChat', ['id'])
-        EffectiveMessage = namedtuple('EffectiveMessage', ['reply_text'])
-        Context = namedtuple('Context', ['bot'])
-        Update = namedtuple('Update', ['effective_chat', 'effective_user', 'message'])
-        
-        # Envolver los datos en estructura similar a python-telegram-bot
-        update = Update(
-            effective_chat=EffectiveChat(id=message.chat.id),
-            effective_user=EffectiveUser(
-                id=message.from_user.id, 
-                first_name=message.from_user.first_name,
-                last_name=message.from_user.last_name if hasattr(message.from_user, 'last_name') else None
-            ),
-            message=EffectiveMessage(reply_text=lambda text: bot.send_message(message.chat.id, text))
-        )
-        context = Context(bot=bot)
-        
-        # Llamar a la implementación existente
-        gestor.finalizar_sesion(update, context)
-    
-    # Handler para configurar grupos
-    @bot.message_handler(commands=['configurar_grupo'])
-    def configurar_grupo_comando(message):
-        """Inicia la configuración de un grupo manualmente"""
-        # Solo funciona en grupos
-        if message.chat.type not in ['group', 'supergroup']:
-            bot.reply_to(message, "Este comando solo funciona en grupos.")
-            return
-        
-        # Verificar si el usuario es profesor
-        user_id = message.from_user.id
-        user = get_user_by_telegram_id(user_id)
-        
-        if not user or user['Tipo'] != 'profesor':
-            bot.reply_to(message, "Solo los profesores pueden configurar grupos.")
-            return
-        
-        # Verificar si el bot es admin
+    def handle_terminar_tutoria(message):
         try:
-            bot_member = bot.get_chat_member(message.chat.id, bot.get_me().id)
-            is_admin = bot_member.status in ['administrator', 'creator']
-            
-            if not is_admin:
-                bot.reply_to(
-                    message, 
-                    "Necesito ser administrador para configurar este grupo. "
-                    "Por favor, hazme administrador y vuelve a intentarlo."
-                )
-                return
-                
-            # Iniciar configuración
             chat_id = message.chat.id
-            chat_title = message.chat.title
+            user_id = message.from_user.id
             
-            # Obtener SOLO las asignaturas del profesor
+            print(f"🔄 Botón 'Terminar Tutoria' pulsado por el usuario {user_id} en chat {chat_id}")
+            
+            # Verificamos que estamos en un grupo
+            if message.chat.type not in ['group', 'supergroup']:
+                bot.send_message(chat_id, "Este comando solo funciona en grupos de tutoría.")
+                return
+            
+            # Obtener información del usuario que pulsó
             conn = get_db_connection()
+            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             
-            # Consulta para obtener asignaturas donde el profesor está matriculado
-            cursor.execute('''
-                SELECT a.Id_asignatura, a.Nombre 
-                FROM Asignaturas a
-                JOIN Matriculas m ON a.Id_asignatura = m.Id_asignatura
-                WHERE m.Id_usuario = ?
-            ''', (user['Id_usuario'],))
+            cursor.execute("SELECT * FROM Usuarios WHERE TelegramID = ?", (user_id,))
+            user = cursor.fetchone()
             
-            asignaturas = cursor.fetchall()
-            conn.close()
-            
-            if not asignaturas:
-                bot.reply_to(message, "No tienes asignaturas asignadas. Contacta con administración.")
+            if not user:
+                bot.send_message(chat_id, "❌ No estás registrado en el sistema.")
+                conn.close()
                 return
             
-            # Crear teclado con opciones de asignaturas
-            markup = types.InlineKeyboardMarkup(row_width=1)
+            # Obtener información de la sala
+            cursor.execute("""
+                SELECT * FROM Grupos_tutoria WHERE Chat_id = ? AND Proposito_sala = 'individual'
+            """, (str(chat_id),))
             
-            for asig in asignaturas:
-                markup.add(types.InlineKeyboardButton(
-                    asig[1], 
-                    callback_data=f"config_asig_{asig[0]}"
-                ))
+            sala = cursor.fetchone()
             
-            # Opción para sala de tutorías
-            markup.add(types.InlineKeyboardButton(
-                "🧑‍🏫 Sala de Tutorías", 
-                callback_data="config_tutoria"
-            ))
-            
-            bot.reply_to(
-                message,
-                "🔄 *Configuración de grupo*\n\n"
-                f"Configurando el grupo *{chat_title}*\n\n"
-                "Por favor, selecciona la asignatura o tipo de sala:",
-                reply_markup=markup,
-                parse_mode="Markdown"
-            )
-            
-            # Guardar estado
-            set_state(user_id, "configurando_grupo")
-            user_data[user_id] = {
-                'chat_id': chat_id,
-                'chat_title': chat_title
-            }
-            
-        except Exception as e:
-            bot.reply_to(message, f"Error al configurar el grupo: {e}")
-            logger.error(f"Error en configurar_grupo_comando: {e}")
-    
-    # Handler para detectar cuando el bot es añadida a un grupo
-    @bot.my_chat_member_handler()
-    def handle_my_chat_member(update):
-        """Detecta cuando el bot es añadida o removido de un grupo"""
-        # Verificar que sea un grupo o supergrupo
-        if update.chat.type not in ['group', 'supergroup']:
-            return
-            
-        # Verificar si el bot fue añadido al grupo
-        if update.new_chat_member.status in ['member', 'administrator'] and update.old_chat_member.status in ['left', 'kicked']:
-            # El bot fue añadido al grupo
-            chat_id = update.chat.id
-            user_id = update.from_user.id
-            
-            # Enviar mensaje de bienvenida
-            bot.send_message(
-                chat_id,
-                "¡Hola a todos!\n\n"
-                "Soy el asistente para gestión de grupos de clase y tutorías. Es un placer "
-                "estar aquí y ayudar a organizar este espacio educativo.\n\n"
-                "Para poder configurar correctamente el grupo necesito ser administrador. "
-                "Por favor, sigue estos pasos:\n\n"
-                "1. Entra en la información del grupo\n"
-                "2. Selecciona 'Administradores'\n"
-                "3. Añádeme como administrador con permisos para:\n"
-                "   - Invitar usuarios mediante enlaces\n"
-                "   - Eliminar mensajes\n"
-                "   - Restringir usuarios"
-            )
-            
-        # Detectar cuando el bot es promovido a administrador
-        elif update.new_chat_member.status == 'administrator' and update.old_chat_member.status in ['member', 'restricted']:
-            # El bot recibió derechos de administrador
-            chat_id = update.chat.id
-            user_id = update.from_user.id
-            
-            bot.send_message(
-                chat_id,
-                "¡Gracias por hacerme administrador!\n\n"
-                "Ahora puedo gestionar completamente este grupo."
-            )
-            
-            # Intentar enviar opciones de configuración al profesor
-            try:
-                # Verificar que el usuario es profesor en tu sistema
-                conn = sqlite3.connect(db_path)
-                cursor = conn.cursor()
-                cursor.execute("SELECT Tipo FROM Usuarios WHERE TelegramID = ?", (user_id,))
-                usuario = cursor.fetchone()
+            if not sala:
                 conn.close()
+                return
                 
-                if usuario and usuario[0] == 'profesor':
-                    # Es profesor, enviar opciones de configuración directamente en el grupo
+            sala_id = sala['id_sala']
+            
+            # Comportamiento diferente según el tipo de usuario
+            if user['Tipo'] == 'estudiante':
+                # CASO 1: ESTUDIANTE - Expulsar al estudiante directamente
+                nombre_completo = f"{user['Nombre']} {user['Apellidos'] or ''}".strip()
+                
+                # Actualizar estado en la base de datos
+                cursor.execute("""
+                    UPDATE Miembros_Grupo 
+                    SET Estado = 'pausado' 
+                    WHERE id_sala = ? AND Id_usuario = ?
+                """, (sala_id, user['Id_usuario']))
+                conn.commit()
+                
+                # Mensaje de despedida
+                bot.send_message(
+                    chat_id, 
+                    f"👋 *Tutoría finalizada*\n\n"
+                    f"El estudiante {nombre_completo} ha finalizado su tutoría.\n"
+                    f"¡Gracias por utilizar el sistema de tutorías!",
+                    parse_mode="Markdown"
+                )
+                
+                # Expulsar temporalmente al estudiante (1 minuto)
+                try:
+                    # Calcular tiempo de expulsión (1 minuto desde ahora)
+                    tiempo_expulsion = int(time.time() + 60)  # 60 segundos
+                    
+                    # Intentar expulsar
+                    bot.ban_chat_member(chat_id, user_id, until_date=tiempo_expulsion)
+                    print(f"✅ Usuario {user_id} expulsado del grupo {chat_id} por 1 minuto")
+                    
+                    # Notificar al estudiante por mensaje privado
+                    try:
+                        bot.send_message(
+                            user_id,
+                            "✅ *Tutoría finalizada correctamente*\n\n"
+                            "Has sido expulsado temporalmente del grupo de tutoría.\n"
+                            "Podrás volver a entrar para una nueva tutoría después de 1 minuto.",
+                            parse_mode="Markdown"
+                        )
+                    except Exception as e:
+                        print(f"Error al enviar mensaje privado: {e}")
+                except Exception as e:
+                    print(f"Error al expulsar usuario: {e}")
                     bot.send_message(
                         chat_id,
-                        "Ahora puedo configurar este grupo para tus clases o tutorías.\n"
-                        "Usa el comando /configurar_grupo dentro del grupo para comenzar."
+                        "⚠️ No se pudo expulsar automáticamente al estudiante.\n"
+                        "Por favor, verifica los permisos del bot en el grupo.",
+                        parse_mode="Markdown"
                     )
-            except Exception as e:
-                print(f"Error al verificar usuario: {e}")
-    
-    # Después del handler bot_added_to_group, añade este nuevo handler
-    @bot.my_chat_member_handler()
-    def handle_my_chat_member(update):
-        """Detecta cuando el bot es añadida o cambia de permisos en un grupo"""
-        # Verificar que es un grupo
-        if update.chat.type not in ['group', 'supergroup']:
-            return
-        
-        # Extraer información relevante
-        chat_id = update.chat.id
-        chat_title = update.chat.title
-        user_id = update.from_user.id
-        old_status = update.old_chat_member.status
-        new_status = update.new_chat_member.status
-        
-        print(f"⚠️ CAMBIO DE ESTADO DEL BOT en {chat_title}: {old_status} -> {new_status}")
-        
-        # Detectar promoción a administrador
-        if old_status in ['member'] and new_status == 'administrator':
-            # El bot acaba de ser promovido a administrador
-            bot.send_message(
-                chat_id,
-                "✅ *¡Gracias por hacerme administrador!*\n\n"
-                "Ahora puedo gestionar completamente el grupo. Usa /configurar_grupo para "
-                "configurar este espacio como sala de tutorías o asignatura.",
-                parse_mode="Markdown"
-            )
-            
-            # Verificar si quien promueve es profesor
-            user = get_user_by_telegram_id(user_id)
-            if user and user['Tipo'] == 'profesor':
-                # Mostrar directamente opciones de configuración
-                configurar_grupo_comando_direct(bot, chat_id, user_id)
+            elif user['Tipo'] == 'profesor':
+                # CASO 2: PROFESOR - Mostrar lista de estudiantes para seleccionar
+                cursor.execute("""
+                    SELECT u.Id_usuario, u.Nombre, u.Apellidos, u.TelegramID
+                    FROM Miembros_Grupo m
+                    JOIN Usuarios u ON m.Id_usuario = u.Id_usuario
+                    WHERE m.id_sala = ? AND u.Tipo = 'estudiante' AND m.Estado = 'activo'
+                    ORDER BY u.Nombre
+                """, (sala_id,))
                 
-        # Otros cambios de estado que podrían ser relevantes
-        elif old_status in ['left', 'kicked'] and new_status in ['member', 'administrator']:
-            # El bot fue añadido al grupo - ya lo maneja el otro handler
-            pass
-        elif new_status in ['left', 'kicked']:
-            # El bot fue removido del grupo
-            logger.info(f"Bot removido del grupo {chat_title} (ID: {chat_id}) por usuario {user_id}")
-
-def configurar_grupo_comando_direct(bot, chat_id, user_id):
-    """Muestra opciones de configuración sin necesidad del comando"""
-    try:
-        # Importar las funciones necesarias
-        from db.queries import get_user_by_telegram_id, get_db_connection
-        from telebot import types
-        from utils.state_manager import user_states, user_data, set_state, get_state, clear_state
-        
-        # Configurar logger
-        logger = logging.getLogger(__name__)
-        
-        # Verificar usuario
-        user = get_user_by_telegram_id(user_id)
-        if not user or user['Tipo'] != 'profesor':
-            return
-            
-        chat_info = bot.get_chat(chat_id)
-        chat_title = chat_info.title
-        
-        # Obtener enlace de invitación
-        enlace_invitacion = None
-        if hasattr(chat_info, 'invite_link') and chat_info.invite_link:
-            enlace_invitacion = chat_info.invite_link
-        else:
-            try:
-                enlace_invitacion = bot.create_chat_invite_link(chat_id).invite_link
-            except Exception as e:
-                logger.error(f"Error creando enlace: {str(e)}")
-        
-        # Obtener asignaturas del profesor
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT a.Id_asignatura, a.Nombre 
-            FROM Asignaturas a
-            JOIN Matriculas m ON a.Id_asignatura = m.Id_asignatura
-            WHERE m.Id_usuario = ? AND m.Tipo = 'docencia'
-        ''', (user['Id_usuario'],))
-        asignaturas = cursor.fetchall()
-        conn.close()
-        
-        if not asignaturas:
-            bot.send_message(
-                chat_id, 
-                "No tienes asignaturas asignadas. Contacta con administración para configurar este grupo."
-            )
-            return
-        
-        # Crear teclado con asignaturas
-        markup = types.InlineKeyboardMarkup(row_width=1)
-        
-        # Opción para tutorías individuales privadas
-        markup.add(types.InlineKeyboardButton(
-            "👤 Tutorías Individuales Privadas", 
-            callback_data="config_tutoria_privada"
-        ))
-        
-        # Opción para tutorías grupales generales
-        markup.add(types.InlineKeyboardButton(
-            "👥 Tutorías Grupales Generales", 
-            callback_data="config_tutoria_general"
-        ))
-        
-        # Asignaturas específicas
-        for asig in asignaturas:
-            markup.add(types.InlineKeyboardButton(
-                f"📚 {asig[1]}", 
-                callback_data=f"config_asig_{asig[0]}"
-            ))
-        
-        # Enviar mensaje con opciones
-        bot.send_message(
-            chat_id,
-            "🔄 *Configuración de sala*\n\n"
-            "Por favor, selecciona el tipo de sala que deseas configurar:",
-            reply_markup=markup,
-            parse_mode="Markdown"
-        )
-        
-        # Guardar datos
-        set_state(user_id, "configurando_grupo")
-        user_data[user_id] = {
-            'chat_id': chat_id,
-            'chat_title': chat_title,
-            'enlace_invitacion': enlace_invitacion
-        }
-    
-    except Exception as e:
-        logger.error(f"Error en configuración automática: {e}")
-        print(f"⚠️ ERROR en configuración automática: {e}")
-
-    @bot.callback_query_handler(func=lambda call: call.data.startswith("config_asig_"))
-    def handle_configuracion_asignatura(call):
-        from db.queries import crear_grupo_tutoria
-        
-        user_id = call.from_user.id
-        id_asignatura = call.data.split('_')[2]  # Extraer ID de la asignatura
-        
-        # Verificar el estado correcto
-        if get_state(user_id) != "configurando_grupo":
-            bot.answer_callback_query(call.id, "Esta opción ya no está disponible")
-            return
-        
-        # Obtener datos guardados
-        if user_id not in user_data or "chat_id" not in user_data[user_id]:
-            bot.answer_callback_query(call.id, "Error: Datos no encontrados")
-            clear_state(user_id)
-            return
-        
-        chat_id = user_data[user_id]["chat_id"]
-        
-        try:
-            # Registrar el grupo en la base de datos
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            
-            # Obtener nombre de la asignatura
-            cursor.execute("SELECT Nombre FROM Asignaturas WHERE Id_asignatura = ?", (id_asignatura,))
-            asignatura_nombre = cursor.fetchone()[0]
-            
-            # Obtener Id_usuario del profesor a partir de su TelegramID
-            cursor.execute("SELECT Id_usuario FROM Usuarios WHERE TelegramID = ?", (str(user_id),))
-            id_usuario = cursor.fetchone()[0]
-            
-            # Crear enlace de invitación si es posible
-            try:
-                enlace_invitacion = bot.create_chat_invite_link(chat_id).invite_link
-            except:
-                enlace_invitacion = None
-        
-            # Usar la función existente para crear el grupo
-            nombre_sala = f"Tutoría: {asignatura_nombre}"
-            tipo_sala = 'pública'
-            
-            # Crear el grupo usando la función
-            crear_grupo_tutoria(
-                profesor_id=id_usuario,  # ✅ CORRECTO
-                nombre_sala=nombre_sala,
-                tipo_sala=tipo_sala,
-                asignatura_id=id_asignatura,
-                chat_id=str(chat_id),
-                enlace=enlace_invitacion
-            )
+                estudiantes = cursor.fetchall()
+                
+                if not estudiantes:
+                    bot.send_message(
+                        chat_id, 
+                        "📊 *No hay estudiantes*\n\nNo hay estudiantes activos en esta tutoría para expulsar.",
+                        parse_mode="Markdown"
+                    )
+                    conn.close()
+                    return
+                
+                # Crear un mensaje con la lista de estudiantes para seleccionar
+                mensaje = "👨‍🎓 *Selecciona el estudiante que ha terminado su tutoría:*\n\n"
+                mensaje += "El estudiante será expulsado temporalmente (1 minuto) del grupo y podrá volver a entrar cuando necesite otra tutoría.\n\n"
+                
+                # Crear botones inline con los estudiantes
+                markup = types.InlineKeyboardMarkup(row_width=1)
+                
+                for estudiante in estudiantes:
+                    nombre_completo = f"{estudiante['Nombre']} {estudiante['Apellidos'] or ''}".strip()
+                    # Incluir ID de usuario y TelegramID en el callback_data
+                    callback_data = f"expulsar_{sala_id}_{estudiante['Id_usuario']}_{estudiante['TelegramID'] or '0'}"
+                    markup.add(types.InlineKeyboardButton(
+                        text=nombre_completo,
+                        callback_data=callback_data
+                    ))
+                
+                # Añadir botón para cancelar
+                markup.add(types.InlineKeyboardButton(
+                    text="❌ Cancelar",
+                    callback_data="cancelar_expulsion"
+                ))
+                
+                # Enviar mensaje con opciones
+                bot.send_message(
+                    chat_id,
+                    mensaje,
+                    reply_markup=markup,
+                    parse_mode="Markdown"
+                )
             
             conn.close()
             
-            # Cambiar nombre del grupo (opcional)
-            try:
-                bot.set_chat_title(chat_id, nombre_sala)
-            except:
-                pass  # Si falla el cambio de nombre, continuamos
-                
-            # Mensaje de éxito
-            bot.edit_message_text(
-                f"✅ Grupo configurado exitosamente como sala de tutoría para *{asignatura_nombre}*",
-                chat_id=call.message.chat.id,
-                message_id=call.message.message_id,
-                parse_mode="Markdown"
-            )
-            
-            # Enviar mensaje informativo
-            # Crear un teclado para profesores
-            def menu_profesor():
-                markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-                markup.row("👥 Invitar Alumno", "❌ Terminar Tutoria")
-                markup.row("📊 Estadísticas", "🔙 Volver")
-                return markup
-                
-            bot.send_message(
-                chat_id,
-                "🎓 *Sala de tutoría configurada*\n\n"
-                "Esta sala está ahora configurada para tutorías de *{asignatura_nombre}*.\n\n"
-                "Como profesor puedes:\n"
-                "• Invitar estudiantes con el botón 'Invitar alumno'\n"
-                "• Expulsar estudiantes cuando finalice su consulta\n"
-                "• Ver estadísticas de uso de la sala",
-                parse_mode="Markdown",
-                reply_markup=menu_profesor()
-            )
-            
         except Exception as e:
-            bot.send_message(chat_id, f"❌ Error al configurar grupo: {str(e)}")
-            logger.error(f"Error configurando grupo {chat_id}: {e}")
-    
-    @bot.callback_query_handler(func=lambda call: call.data == "config_tutoria_privada")
-    def handle_configuracion_tutoria(call):
-        user_id = call.from_user.id
-        
-        # Verificar estado
-        if get_state(user_id) != "configurando_grupo":
-            bot.answer_callback_query(call.id, "Esta opción ya no está disponible")
-            return
-        
-        # Obtener datos guardados
-        if user_id not in user_data:
-            bot.answer_callback_query(call.id, "Error: Datos no encontrados")
-            clear_state(user_id)
-            return
-            
-        chat_id = user_data[user_id]["chat_id"]
-        
+            print(f"Error en handle_terminar_tutoria: {e}")
+            import traceback
+            traceback.print_exc()
+            bot.send_message(chat_id, "❌ Ocurrió un error al procesar tu solicitud.")
+
+    # También necesitas manejar los callbacks de los botones inline para cuando el profesor selecciona un estudiante
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("expulsar_"))
+    def handle_expulsar_estudiante(call):
         try:
-            # Registrar el grupo en la base de datos
+            chat_id = call.message.chat.id
+            profesor_id = call.from_user.id
+            
+            # Parsear el callback_data
+            _, sala_id, estudiante_id, telegram_id = call.data.split("_")
+            
+            # Convertir IDs a enteros
+            sala_id = int(sala_id)
+            estudiante_id = int(estudiante_id)
+            telegram_id = int(telegram_id) if telegram_id != '0' else None
+            
+            if not telegram_id:
+                bot.answer_callback_query(call.id, "❌ No se puede expulsar a este usuario porque no tiene ID de Telegram registrado")
+                return
+                
+            # Conectar a la base de datos
             conn = get_db_connection()
             cursor = conn.cursor()
             
-            # Obtener Id_usuario del profesor
-            cursor.execute("SELECT Id_usuario FROM Usuarios WHERE TelegramID = ?", (str(user_id),))
-            id_usuario = cursor.fetchone()[0]
+            # Verificar permisos del profesor
+            cursor.execute("SELECT * FROM Usuarios WHERE TelegramID = ? AND Tipo = 'profesor'", (profesor_id,))
+            profesor = cursor.fetchone()
             
-            # Crear enlace de invitación si es posible
+            if not profesor:
+                bot.answer_callback_query(call.id, "❌ No tienes permisos para realizar esta acción")
+                conn.close()
+                return
+            
+            # Obtener información del estudiante
+            cursor.execute("SELECT * FROM Usuarios WHERE Id_usuario = ?", (estudiante_id,))
+            estudiante = cursor.fetchone()
+            
+            if not estudiante:
+                bot.answer_callback_query(call.id, "❌ Estudiante no encontrado")
+                conn.close()
+                return
+                
+            # Actualizar estado del estudiante en la base de datos
+            cursor.execute("""
+                UPDATE Miembros_Grupo 
+                SET Estado = 'pausado' 
+                WHERE id_sala = ? AND Id_usuario = ?
+            """, (sala_id, estudiante_id))
+            conn.commit()
+            
+            # Crear nombre completo para mensajes
+            nombre_completo = f"{estudiante['Nombre']} {estudiante['Apellidos'] or ''}".strip()
+            
+            # Calcular tiempo de expulsión (1 minuto desde ahora)
+            tiempo_expulsion = int(time.time() + 60)  # 60 segundos
+            
+            # Expulsar al estudiante
             try:
-                enlace_invitacion = bot.create_chat_invite_link(chat_id).invite_link
-            except:
-                enlace_invitacion = user_data[user_id].get('enlace_invitacion')
-        
-            # Usar la función existente para crear el grupo
-            nombre_sala = "Sala de Tutorías Individuales"
-            tipo_sala = 'privada'
-            
-            # Crear el grupo usando la función
-            from db.queries import crear_grupo_tutoria
-            crear_grupo_tutoria(
-                profesor_id=id_usuario,  # ✅ CORRECTO
-                nombre_sala=nombre_sala,
-                tipo_sala=tipo_sala,
-                asignatura_id=None,  # Sin asignatura para tutorías generales
-                chat_id=str(chat_id),
-                enlace=enlace_invitacion
-            )
-            
+                bot.ban_chat_member(chat_id, telegram_id, until_date=tiempo_expulsion)
+                
+                # Notificar en el grupo
+                bot.edit_message_text(
+                    f"✅ *Estudiante expulsado*\n\n"
+                    f"El estudiante {nombre_completo} ha sido expulsado temporalmente.\n"
+                    f"Podrá volver a unirse al grupo después de 1 minuto.",
+                    chat_id=chat_id,
+                    message_id=call.message.message_id,
+                    parse_mode="Markdown"
+                )
+                
+                # Notificar al estudiante por mensaje privado
+                try:
+                    bot.send_message(
+                        telegram_id,
+                        "✅ *Tutoría finalizada por el profesor*\n\n"
+                        "Has sido expulsado temporalmente del grupo de tutoría.\n"
+                        "Podrás volver a entrar para una nueva tutoría después de 1 minuto.",
+                        parse_mode="Markdown"
+                    )
+                except Exception as e:
+                    print(f"Error al enviar mensaje privado: {e}")
+                
+            except Exception as e:
+                print(f"Error al expulsar estudiante: {e}")
+                bot.edit_message_text(
+                    f"❌ *Error al expulsar*\n\n"
+                    f"No se pudo expulsar al estudiante {nombre_completo}.\n"
+                    f"Error: {str(e)}",
+                    chat_id=chat_id,
+                    message_id=call.message.message_id,
+                    parse_mode="Markdown"
+                )
+                
             conn.close()
             
-            # Cambiar nombre del grupo (opcional)
-            try:
-                bot.set_chat_title(chat_id, nombre_sala)
-            except:
-                pass
-            
-            # Mensaje de éxito
-            bot.edit_message_text(
-                "✅ Grupo configurado exitosamente como sala de tutorías individuales",
-                chat_id=call.message.chat.id,
-                message_id=call.message.message_id,
-                parse_mode="Markdown"
-            )
-            
-            # Crear un teclado para profesores
-            def menu_profesor():
-                markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-                markup.row("👥 Invitar Alumno", "❌ Terminar Tutoria")
-                markup.row("📊 Estadísticas", "🔙 Volver")
-                return markup
-                
-            # Enviar mensaje informativo
-            bot.send_message(
-                chat_id,
-                "🎓 *Sala de tutorías configurada*\n\n"
-                "Esta sala está configurada para tutorías individuales.\n\n"
-                "Como profesor puedes:\n"
-                "• Invitar estudiantes con el botón 'Invitar alumno'\n"
-                "• Finalizar la sesión cuando termine la tutoría\n"
-                "• Ver estadísticas de uso de la sala",
-                parse_mode="Markdown",
-                reply_markup=menu_profesor()
-            )
-            
         except Exception as e:
-            bot.send_message(chat_id, f"❌ Error al configurar grupo: {str(e)}")
-            logger.error(f"Error configurando sala de tutorías {chat_id}: {e}")
-        
-        # Limpiar estado
-        clear_state(user_id)
-
-def cambiar_nombre_grupo_telegram(chat_id, nuevo_nombre):
-    """
-    Función para cambiar el nombre de un grupo de Telegram.
-    Esta función está diseñada para ser llamada desde main.py
-    
-    Args:
-        chat_id: ID del chat de Telegram
-        nuevo_nombre: Nuevo nombre para el grupo
-    
-    Returns:
-        bool: True si se cambió con éxito, False en caso contrario
-    """
-    try:
-        # Importamos para usar el mismo bot que maneja los grupos
-        from telegram import Bot
-        from config import TOKEN as TELEGRAM_TOKEN  # Asegúrate de tener el token correcto
-        
-        bot = Bot(TELEGRAM_TOKEN)
-        bot.set_chat_title(chat_id, nuevo_nombre)
-        print(f"✅ Nombre del grupo {chat_id} actualizado a: {nuevo_nombre}")
-        return True
-    except Exception as e:
-        print(f"⚠️ Error al cambiar nombre del grupo {chat_id}: {e}")
-        return False
+            print(f"Error en handle_expulsar_estudiante: {e}")
+            import traceback
+            traceback.print_exc()
+            bot.answer_callback_query(call.id, "❌ Error al procesar la solicitud")
