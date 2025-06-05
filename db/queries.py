@@ -285,6 +285,37 @@ def crear_grupo_tutoria(profesor_id, nombre_sala, tipo_sala, asignatura_id, chat
     finally:
         conn.close()
 
+def crear_grupo_tutoria_directo(conn, profesor_id, nombre_sala, tipo_sala, asignatura_id, chat_id, enlace=None):
+    """
+    Versión adaptada de crear_grupo_tutoria que utiliza una conexión existente
+    y es compatible con la estructura actual de la base de datos
+    """
+    try:
+        cursor = conn.cursor()
+        
+        # Primera inserción - Grupo (usando el nombre correcto de la columna: Enlace_invitacion)
+        cursor.execute("""
+            INSERT INTO Grupos_tutoria 
+            (Id_usuario, Nombre_sala, Tipo_sala, Id_asignatura, Chat_id, Proposito_sala, Enlace_invitacion)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (profesor_id, nombre_sala, tipo_sala, asignatura_id, chat_id, 
+              'avisos' if tipo_sala == 'pública' else 'individual', enlace))
+        
+        # Obtener el ID generado del grupo
+        grupo_id = cursor.lastrowid
+        
+        # Añadir al profesor como miembro del grupo (en lugar de usar Administradores_Grupo)
+        cursor.execute("""
+            INSERT INTO Miembros_Grupo (id_sala, Id_usuario, Estado)
+            VALUES (?, ?, 'activo')
+        """, (grupo_id, profesor_id))
+        
+        return grupo_id
+    except Exception as e:
+        print(f"Error en crear_grupo_tutoria_directo: {e}")
+        conn.rollback()
+        return None
+
 def actualizar_grupo_tutoria(grupo_id, **kwargs):
     """
     Actualiza la información de un grupo de tutoría

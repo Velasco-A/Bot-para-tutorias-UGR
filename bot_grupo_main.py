@@ -13,7 +13,7 @@ import sqlite3
 from dotenv import load_dotenv
 
 # Importar utilidades y handlers
-from grupo_handlers.grupos import register_handlers as register_grupo_handlers
+from grupo_handlers.grupos import GestionGrupos
 from grupo_handlers.valoraciones import register_handlers as register_valoraciones_handlers
 from grupo_handlers.utils import (
     limpiar_estados_obsoletos, es_profesor, menu_profesor, menu_estudiante, 
@@ -46,6 +46,9 @@ if not BOT_TOKEN:
     logger.critical("Token del bot de grupos no encontrado")
     print("El token del bot de grupos no está configurado. Añade TOKEN_GRUPO en datos.env.txt")
     sys.exit(1)
+
+from telebot import apihelper
+apihelper.ENABLE_MIDDLEWARE = True
 
 # Inicializar el bot
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -214,6 +217,8 @@ def limpieza_periodica():
         except Exception as e:
             logger.error(f"Error en limpieza periódica: {e}")
 
+# Reemplaza la función configurar_grupo actual con esta versión mejorada:
+
 @bot.message_handler(commands=['configurar_grupo'])
 def configurar_grupo(message):
     """
@@ -302,7 +307,6 @@ def configurar_grupo(message):
     salas_actuales = cursor.fetchall()
     print(f"\n--- SALAS ACTUALES PARA PROFESOR ID {profesor_id} ---")
     for sala in salas_actuales:
-        # Usar operador ternario para manejar valores nulos
         nombre_asignatura = sala['Asignatura'] if sala['Asignatura'] is not None else 'N/A'
         print(f"Sala ID: {sala['id_sala']}, Nombre: {sala['Nombre_sala']}, " + 
               f"Asignatura ID: {sala['Id_asignatura']}, Asignatura: {nombre_asignatura}")
@@ -364,7 +368,72 @@ def configurar_grupo(message):
         parse_mode="Markdown"
     )
 
-# Añadir este callback handler a archivo grupo_handlers/grupos.py
+# Añadir este handler después de handle_new_chat_members
+@bot.message_handler(content_types=['group_chat_created'])
+def handle_group_created(message):
+    """Maneja cuando el bot es añadida durante la creación de un grupo"""
+    try:
+        print("\n==================================================")
+        print("⚠️⚠️⚠️ HANDLER ACTIVADO: GRUPO CREADO ⚠️⚠️⚠️")
+        print(f"⚠️ Chat ID: {message.chat.id} | Tipo: {message.chat.type}")
+        print(f"⚠️ De: {message.from_user.first_name} (ID: {message.from_user.id})")
+        print("==================================================\n")
+        
+        chat_id = message.chat.id
+        
+        print(f"🤖 BOT AÑADIDO AL GRUPO RECIÉN CREADO {chat_id}")
+        
+        bot.send_message(
+            chat_id,
+            "¡Hola a todos!\n\n"
+                "Soy el asistente para gestión de grupos de clase y tutorías. Es un placer "
+                "estar aquí y ayudar a organizar este espacio educativo.\n\n"
+                "Para poder configurar correctamente el grupo necesito ser administrador. "
+                "Por favor, sigue estos pasos:\n\n"
+                "1. Entra en la información del grupo\n"
+                "2. Selecciona 'Administradores'\n"
+                "3. Añádeme como administrador\n\n"
+                "Una vez me hayas hecho administrador, podré configurar este grupo "
+                "para tu clase o tutorías. ¡Gracias por tu confianza!"
+        )
+        
+        print(f"✅ Mensaje de bienvenida enviado al grupo {chat_id}")
+        
+        # Registrar el grupo en la base de datos provisionalmente
+        try:
+            nombre_grupo = message.chat.title
+            
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Verificar si el grupo ya existe
+            cursor.execute("SELECT * FROM Grupos_tutoria WHERE Chat_id = ?", (str(chat_id),))
+            grupo = cursor.fetchone()
+            
+            if not grupo:
+                # Crear registro provisional
+                cursor.execute(
+                    """INSERT INTO Grupos_tutoria 
+                    (Id_usuario, Nombre_sala, Tipo_sala, Chat_id, Proposito_sala) 
+                    VALUES (?, ?, ?, ?, ?)""",
+                    (message.from_user.id, nombre_grupo, 'pública', str(chat_id), 'pendiente')
+                )
+                conn.commit()
+                print(f"✅ Grupo {nombre_grupo} (ID: {chat_id}) registrado como 'pendiente'")
+            else:
+                print(f"⚠️ El grupo {nombre_grupo} ya estaba registrado")
+            
+            conn.close()
+        except Exception as e:
+            print(f"❌ Error al registrar grupo: {e}")
+            import traceback
+            traceback.print_exc()
+        
+    except Exception as e:
+        print(f"❌❌❌ ERROR EN HANDLER GROUP_CREATED: {e}")
+        import traceback
+        traceback.print_exc()
+    
 @bot.callback_query_handler(func=lambda call: call.data.startswith('config_asig_'))
 def handle_configuracion_asignatura(call):
     user_id = call.from_user.id
@@ -384,79 +453,85 @@ def handle_configuracion_asignatura(call):
     chat_id = user_data[user_id]["chat_id"]
     
     try:
-        # Registrar el grupo en la base de datos
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        # Usar la nueva función para operaciones de BD
+        from grupo_handlers.utils import execute_db_operation
         
-        # Obtener nombre de la asignatura
-        cursor.execute("SELECT Nombre FROM Asignaturas WHERE Id_asignatura = ?", (id_asignatura,))
-        asignatura_nombre = cursor.fetchone()[0]
+        # Función que encapsula toda la lógica de base de datos
+        def configurar_grupo_db(conn, cursor):
+            # Obtener nombre de la asignatura
+            cursor.execute("SELECT Nombre FROM Asignaturas WHERE Id_asignatura = ?", (id_asignatura,))
+            asignatura_nombre = cursor.fetchone()[0]
+            
+            # Obtener Id_usuario del profesor a partir de su TelegramID
+            cursor.execute("SELECT Id_usuario FROM Usuarios WHERE TelegramID = ?", (str(user_id),))
+            id_usuario_profesor = cursor.fetchone()[0]
+            
+            return asignatura_nombre, id_usuario_profesor
         
-        # Obtener Id_usuario del profesor a partir de su TelegramID
-        cursor.execute("SELECT Id_usuario FROM Usuarios WHERE TelegramID = ?", (str(user_id),))
-        id_usuario_profesor = cursor.fetchone()[0]
-
-        # Cerrar la conexión temporal
-        conn.close()
-
+        # Ejecutar consultas de base de datos con manejo de bloqueos
+        result = execute_db_operation(configurar_grupo_db)
+        
+        if not result:
+            bot.send_message(chat_id, "❌ Error al acceder a la base de datos. Inténtalo de nuevo.")
+            return
+            
+        asignatura_nombre, id_usuario_profesor = result
+        
         # Crear enlace de invitación si es posible
         try:
             enlace_invitacion = bot.create_chat_invite_link(chat_id).invite_link
         except:
             enlace_invitacion = None
         
-        # Configurar directamente como sala de avisos (pública)
-        # CORRECCIÓN: Usar "pública" con tilde para cumplir con el constraint
-        tipo_sala = "pública"  # Cambiado de "publica" a "pública"
-        sala_tipo_texto = "Avisos"
-        nuevo_nombre = f"{asignatura_nombre} - Avisos"
+        # MODIFICACIÓN: En lugar de configurar directamente, preguntar el propósito
+        # Guardar los datos en user_data
+        user_data[user_id].update({
+            "id_asignatura": id_asignatura,
+            "asignatura_nombre": asignatura_nombre,
+            "id_usuario_profesor": id_usuario_profesor,
+            "enlace_invitacion": enlace_invitacion
+        })
         
-        # Cambiar el nombre del grupo
-        try:
-            bot.set_chat_title(chat_id, nuevo_nombre)
-        except Exception as e:
-            logger.warning(f"No se pudo cambiar el nombre del grupo: {e}")
+        # Cambiar el estado del usuario
+        set_state(user_id, "esperando_proposito_sala")
         
-        # Crear el grupo en la base de datos
-        from db.queries import crear_grupo_tutoria
-        crear_grupo_tutoria(
-            profesor_id=id_usuario_profesor,
-            nombre_sala=nuevo_nombre,
-            tipo_sala=tipo_sala,  # Ahora con el valor correcto "pública"
-            asignatura_id=id_asignatura,
-            chat_id=str(chat_id),
-            enlace=enlace_invitacion
+        # Crear teclado con opciones de propósito
+        markup = types.InlineKeyboardMarkup(row_width=1)
+        markup.add(
+            types.InlineKeyboardButton(
+                text="Sala de Avisos (pública)", 
+                callback_data=f"proposito_avisos_{id_asignatura}"
+            ),
+            types.InlineKeyboardButton(
+                text="Sala de Tutoría (privada)",
+                callback_data="proposito_tutoria"
+            ),
+            types.InlineKeyboardButton(
+                text="❌ Cancelar",
+                callback_data="cancelar"
+            )
         )
         
-        # Mensaje de éxito
+        # Editar el mensaje para mostrar las opciones
         bot.edit_message_text(
-            f"✅ Grupo configurado exitosamente como sala de avisos para *{asignatura_nombre}*",
+            f"🏫 *{asignatura_nombre}*\n\n"
+            "¿Qué tipo de sala quieres configurar?\n\n"
+            "📢 *Sala de Avisos*: Para enviar anuncios generales de la asignatura.\n"
+            "👨‍🏫 *Sala de Tutoría*: Para tutorías privadas con estudiantes específicos.",
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
-            parse_mode="Markdown"
-        )
-        
-        # Enviar mensaje informativo
-        descripcion = "Esta es una sala para **avisos generales** de la asignatura donde los estudiantes pueden unirse mediante el enlace de invitación."
-        
-        bot.send_message(
-            chat_id,
-            f"🎓 *Sala configurada*\n\n"
-            f"Esta sala está ahora configurada como: *Sala de Avisos*\n\n"
-            f"{descripcion}\n\n"
-            "Como profesor puedes:\n"
-            "• Gestionar el grupo según el propósito configurado\n"
-            "• Compartir el enlace de invitación con tus estudiantes",
             parse_mode="Markdown",
-            reply_markup=menu_profesor()  # Esto ahora devuelve un ReplyKeyboardMarkup
+            reply_markup=markup
         )
         
     except Exception as e:
         bot.send_message(chat_id, f"❌ Error al configurar grupo: {str(e)}")
         logger.error(f"Error en la selección de asignatura {chat_id}: {e}")
-    
-    # Limpiar estado
-    clear_state(user_id)
+        import traceback
+        traceback.print_exc()
+        
+        # Limpiar estado en caso de error
+        clear_state(user_id)
 
 @bot.callback_query_handler(func=lambda call: call.data == 'config_tutoria_privada')
 def handle_configuracion_tutoria_privada(call):
@@ -991,103 +1066,108 @@ def handle_expulsar_estudiante(call):
 def handle_new_chat_members(message):
     """Maneja cuando un nuevo miembro se une al grupo"""
     try:
+        print("\n==================================================")
+        print("⚠️⚠️⚠️ HANDLER ACTIVADO PARA NUEVOS MIEMBROS ⚠️⚠️⚠️")
+        print(f"⚠️ Chat ID: {message.chat.id} | Tipo: {message.chat.type}")
+        print(f"⚠️ De: {message.from_user.first_name} (ID: {message.from_user.id})")
+        print(f"⚠️ Nuevos miembros: {[(m.first_name, m.id) for m in message.new_chat_members]}")
+        print("==================================================\n")
+        
         chat_id = message.chat.id
-        for new_member in message.new_chat_members:
-            user_id = new_member.id
+        bot_id = bot.get_me().id
+        
+        # Detectar si el bot fue añadida
+        bot_added = False
+        for member in message.new_chat_members:
+            if member.id == bot_id:
+                bot_added = True
+                print(f"✓ BOT DETECTADO COMO NUEVO MIEMBRO: {bot_id}")
+            else:
+                print(f"→ OTRO USUARIO DETECTADO: {member.id}")
+        
+        # Caso 1: El BOT fue añadido al grupo
+        if bot_added:
+            print(f"🤖 BOT AÑADIDO AL GRUPO {chat_id}")
             
-            # Ignorar si es el propio bot
-            if user_id == bot.get_me().id:
-                return
+            # Mensaje personalizado cuando el bot es añadida
+            bot.send_message(
+                chat_id,
+                "¡Hola a todos!\n\n"
+                "Soy el asistente para gestión de grupos de clase y tutorías. Es un placer "
+                "estar aquí y ayudar a organizar este espacio educativo.\n\n"
+                "Para poder configurar correctamente el grupo necesito ser administrador. "
+                "Por favor, sigue estos pasos:\n\n"
+                "1. Entra en la información del grupo\n"
+                "2. Selecciona 'Administradores'\n"
+                "3. Añádeme como administrador\n\n"
+                "Una vez me hayas hecho administrador, podré configurar este grupo "
+                "para tu clase o tutorías. ¡Gracias por tu confianza!"
+            )
+            
+            print(f"✅ Mensaje de bienvenida enviado al grupo {chat_id}")
+            
+            # Registrar el grupo en la base de datos provisionalmente
+            try:
+                nombre_grupo = message.chat.title
                 
-            # Obtener información del usuario
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            
-            # Verificar si el grupo es un grupo de tutorías registrado
-            cursor.execute("""
-                SELECT * FROM Grupos_tutoria WHERE Chat_id = ?
-            """, (str(chat_id),))
-            
-            grupo = cursor.fetchone()
-            
-            if not grupo:
-                # No es un grupo registrado
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                
+                # Verificar si el grupo ya existe
+                cursor.execute("SELECT * FROM Grupos_tutoria WHERE Chat_id = ?", (str(chat_id),))
+                grupo = cursor.fetchone()
+                
+                if not grupo:
+                    # Crear registro provisional
+                    cursor.execute(
+                        """INSERT INTO Grupos_tutoria 
+                        (Id_usuario, Nombre_sala, Tipo_sala, Chat_id, Proposito_sala) 
+                        VALUES (?, ?, ?, ?, ?)""",
+                        (message.from_user.id, nombre_grupo, 'pública', str(chat_id), 'pendiente')
+                    )
+                    conn.commit()
+                    print(f"✅ Grupo {nombre_grupo} (ID: {chat_id}) registrado como 'pendiente'")
+                else:
+                    print(f"⚠️ El grupo {nombre_grupo} ya estaba registrado")
+                
                 conn.close()
-                return
-                
-            # Comprobar si el usuario está registrado
-            cursor.execute("SELECT * FROM Usuarios WHERE TelegramID = ?", (user_id,))
-            usuario = cursor.fetchone()
-            
-            if not usuario:
-                # Usuario no registrado - enviar mensaje informativo
-                bot.send_message(
-                    chat_id, 
-                    f"👋 Bienvenido/a nuevo usuario.\n\n"
-                    f"Para poder participar completamente en este grupo, primero debes registrarte "
-                    f"con el bot principal @TuBotPrincipal.",
-                    parse_mode="Markdown"
-                )
-                conn.close()
-                return
-            
-            # Usuario registrado
-            nombre_completo = f"{usuario['Nombre']} {usuario['Apellidos'] or ''}".strip()
-            tipo_usuario = usuario['Tipo']
-            
-            print(f"Nuevo miembro en grupo {chat_id}: {nombre_completo} ({tipo_usuario})")
-            
-            # Mensaje de bienvenida personalizado según el tipo de usuario
-            if tipo_usuario == 'estudiante':
-                # Enviar mensaje de bienvenida para estudiantes
-                mensaje = (
-                    f"👋 ¡Bienvenido/a *{nombre_completo}*!\n\n"
-                    f"Te has unido a una sala de tutoría. Cuando finalices tu consulta, "
-                    f"pulsa el botón '❌ Terminar Tutoria' para salir."
-                )
-                
-                # Registrar al estudiante en la base de datos
-                try:
-                    # Solo si es un grupo de tutorías individuales
-                    if grupo['Proposito_sala'] == 'individual':
-                        cursor.execute("""
-                            INSERT INTO Miembros_Grupo (id_sala, Id_usuario, Fecha_union, Estado)
-                            VALUES (?, ?, CURRENT_TIMESTAMP, 'activo')
-                        """, (grupo['id_sala'], usuario['Id_usuario']))
-                        conn.commit()
-                except Exception as e:
-                    print(f"Error al registrar estudiante en grupo: {e}")
-                
-                # Enviar mensaje con botón
-                bot.send_message(
-                    chat_id, 
-                    mensaje,
-                    reply_markup=menu_estudiante(),
-                    parse_mode="Markdown"
-                )
-                
-            elif tipo_usuario == 'profesor':
-                # Enviar mensaje de bienvenida para profesores
-                mensaje = (
-                    f"👨‍🏫 ¡Bienvenido/a Profesor/a *{nombre_completo}*!\n\n"
-                    f"Este es tu grupo de tutorías. Para expulsar a un estudiante cuando termine "
-                    f"su consulta, usa el botón '❌ Terminar Tutoria'."
-                )
-                
-                bot.send_message(
-                    chat_id, 
-                    mensaje,
-                    reply_markup=menu_profesor(),
-                    parse_mode="Markdown"
-                )
-            
-            conn.close()
-            
+            except Exception as e:
+                print(f"❌ Error al registrar grupo: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Caso 2: Otros usuarios fueron añadidos
+        else:
+            for new_member in message.new_chat_members:
+                print(f"👤 Procesando nuevo usuario: {new_member.first_name} (ID: {new_member.id})")
+                # Resto del código para manejar nuevos miembros
+    
     except Exception as e:
-        print(f"Error al dar la bienvenida a nuevo miembro: {e}")
+        print(f"❌❌❌ ERROR EN HANDLER NEW_CHAT_MEMBERS: {e}")
         import traceback
         traceback.print_exc()
 
+@bot.middleware_handler(update_types=['message'])
+def debug_all_messages(bot_instance, message):
+    print("\n==================================================")
+    print(f"🔍 MIDDLEWARE: Mensaje recibido - Tipo: {type(message).__name__}")
+    if hasattr(message, 'content_type'):
+        print(f"🔍 Tipo de contenido: {message.content_type}")
+    
+    print(f"🔍 De: {message.from_user.first_name} (ID: {message.from_user.id})")
+    print(f"🔍 Chat: {message.chat.id} ({message.chat.type})")
+    
+    if hasattr(message, 'new_chat_members') and message.new_chat_members:
+        print(f"🔍 ¡NUEVOS MIEMBROS DETECTADOS!: {[(m.first_name, m.id) for m in message.new_chat_members]}")
+    
+    print("==================================================\n")
+    return message
+
+# Añadir estos handlers ANTES del bloque if __name__ == "__main__":
+
+
+
+# Luego viene el if __name__ == "__main__":
 if __name__ == "__main__":
     # Verificar que existe la base de datos
     if not os.path.exists(os.path.join(base_dir, "tutoria_ugr.db")):
@@ -1108,20 +1188,151 @@ if __name__ == "__main__":
         telebot.types.BotCommand('/configurar_grupo', 'Configurar este grupo como sala')
     ], scope=telebot.types.BotCommandScopeAllGroupChats())
     
+    # PRIMERO: Registra los handlers propios de bot_grupo_main.py
+    # NO HAY CAMBIOS A ESTA PARTE - Tus handlers definidos directamente aquí serán registrados primero
+    
+    # SEGUNDO: Registra los handlers externos DESPUÉS, para que no sobreescriban 
     # Registrar handlers específicos
-    register_grupo_handlers(bot)
+    from db.queries import DB_PATH
+    gestion_grupos = GestionGrupos(str(DB_PATH))
+    
+    # IMPORTANTE: COMENTA ESTA LÍNEA
+    # gestion_grupos.registrar_handlers(bot)
+    
+    # REGÍSTRALOS MANUALMENTE en su lugar:
+    @bot.message_handler(commands=['finalizar'])
+    def finalizar_handler(message):
+        print("🔄 Comando finalizar recibido")
+        gestion_grupos.finalizar_sesion(message)
+    
+    @bot.message_handler(commands=['eliminar_sala'])
+    def eliminar_sala_handler(message):
+        print("🔄 Comando eliminar_sala recibido")
+        gestion_grupos.eliminar_sala(message)
+    
+    @bot.message_handler(commands=['cambiar_asignatura'])
+    def cambiar_asignatura_handler(message):
+        print("🔄 Comando cambiar_asignatura recibido")
+        gestion_grupos.cambiar_asignatura_sala(message)
+        
+    # Registrar callbacks manualmente
+    @bot.callback_query_handler(func=lambda call: call.data.startswith("eliminar_"))
+    def ejecutar_eliminar_sala_handler(call):
+        gestion_grupos.ejecutar_eliminar_sala(call)
+    
+    @bot.callback_query_handler(func=lambda call: call.data == "cancelar")
+    def cancelar_handler(call):
+        bot.answer_callback_query(call.id, "Operación cancelada")
+    
+    # Resto de callbacks...
+    
+    # Registrar otros handlers
     register_valoraciones_handlers(bot)
     
     # Iniciar hilo de limpieza
     threading.Thread(target=limpieza_periodica, daemon=True).start()
     
+    
     print(f"🤖 Bot de Grupos iniciado con token: {BOT_TOKEN[:5]}...{BOT_TOKEN[-5:]}")
     logger.info("Bot de Grupos iniciado")
     
+    # Reemplazar el bucle de polling al final
     # Polling con manejo de errores
     while True:
         try:
-            bot.polling(none_stop=True, timeout=60)
+            print("\n==================================================")
+            print("🟢🟢🟢 INICIANDO POLLING DEL BOT 🟢🟢🟢")
+            print("==================================================\n")
+            
+            # Imprimir todos los handlers registrados para depurar
+            all_handlers = bot.message_handlers
+            print(f"Handlers registrados: {len(all_handlers)} handlers")
+            for i, handler in enumerate(all_handlers):
+                print(f"Handler #{i+1}: {handler}")
+                
+            # Verificar específicamente handlers de new_chat_members
+            new_members_handlers = [h for h in all_handlers if 'filters' in h and 
+                                   'content_types' in h['filters'] and
+                                   'new_chat_members' in h['filters']['content_types']]
+            print(f"\n🔍 Handlers específicos para new_chat_members: {len(new_members_handlers)}")
+            for i, h in enumerate(new_members_handlers):
+                print(f"  - Handler #{i+1}: {h}")
+            
+            bot.infinity_polling(timeout=60, long_polling_timeout=30)
         except Exception as e:
+            print(f"❌❌❌ ERROR EN POLLING: {e} ❌❌❌")
             logger.error(f"Error en polling: {e}")
+            import traceback
+            traceback.print_exc()
             time.sleep(10)
+
+@bot.message_handler(content_types=['migrate_to_chat_id', 'migrate_from_chat_id'])
+def handle_upgrade_to_supergroup(message):
+    """Maneja cuando un grupo se actualiza a supergrupo"""
+    try:
+        print("\n==================================================")
+        print("⚠️⚠️⚠️ HANDLER ACTIVADO: MIGRACIÓN DE GRUPO ⚠️⚠️⚠️")
+        print(f"⚠️ Chat ID: {message.chat.id}")
+        print(f"⚠️ Contenido: {message.__dict__}")
+        
+        old_id = None
+        new_id = None
+        
+        if hasattr(message, 'migrate_from_chat_id') and message.migrate_from_chat_id:
+            old_id = message.migrate_from_chat_id
+            new_id = message.chat.id
+            print(f"⚠️ Migración DETECTADA - Viejo ID: {old_id}, Nuevo ID: {new_id}")
+            
+        elif hasattr(message, 'migrate_to_chat_id') and message.migrate_to_chat_id:
+            old_id = message.chat.id
+            new_id = message.migrate_to_chat_id
+            print(f"⚠️ Migración DETECTADA - Viejo ID: {old_id}, Nuevo ID: {new_id}")
+            
+        if old_id and new_id:
+            # Actualizar registro en la base de datos
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Comprobar si existe el grupo con el ID antiguo
+            cursor.execute("SELECT * FROM Grupos_tutoria WHERE Chat_id = ?", (str(old_id),))
+            grupo = cursor.fetchone()
+            
+            if grupo:
+                print(f"✓ Grupo encontrado con ID antiguo: {old_id}")
+                
+                # Comprobar que no exista otro grupo con el nuevo ID
+                cursor.execute("SELECT * FROM Grupos_tutoria WHERE Chat_id = ?", (str(new_id),))
+                grupo_nuevo = cursor.fetchone()
+                
+                if not grupo_nuevo:
+                    # Actualizar el ID del chat
+                    cursor.execute(
+                        "UPDATE Grupos_tutoria SET Chat_id = ? WHERE Chat_id = ?", 
+                        (str(new_id), str(old_id))
+                    )
+                    conn.commit()
+                    print(f"✅ ID de chat actualizado: {old_id} → {new_id}")
+                    
+                    # Enviar mensaje informativo en el nuevo supergrupo
+                    try:
+                        bot.send_message(
+                            new_id,
+                            "⚠️ Este grupo ha sido actualizado a supergrupo por Telegram.\n\n"
+                            "He actualizado automáticamente la configuración. Todo debería seguir funcionando correctamente."
+                        )
+                    except Exception as e:
+                        print(f"Error al enviar mensaje al nuevo supergrupo: {e}")
+                else:
+                    print(f"⚠️ Ya existe un grupo con el nuevo ID {new_id}")
+            else:
+                print(f"⚠️ No se encontró grupo con ID {old_id}")
+                
+            conn.close()
+        else:
+            print("⚠️ No se detectaron IDs de migración")
+            
+    except Exception as e:
+        print(f"❌❌❌ ERROR EN HANDLER MIGRACIÓN: {e}")
+        import traceback
+        traceback.print_exc()
+

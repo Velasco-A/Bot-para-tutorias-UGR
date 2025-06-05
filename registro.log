@@ -55,3 +55,18 @@
 2025-06-01 12:52:40,194 [INFO] TOKEN DE VERIFICACIÓN enviado a velascofuentesclara@gmail.com: 774546
 2025-06-01 12:52:56,134 [INFO] Usuario velascofuentesclara@gmail.com verificado correctamente. TelegramID actualizado.
 2025-06-01 12:52:56,219 [ERROR] Error al enviar mensaje de bienvenida: cannot import name 'enviar_mensaje_bienvenida' from 'main' (c:\Users\Alberto\Desktop\TFG_V2\main.py)
+2025-06-04 19:46:36,323 [INFO] TOKEN DE VERIFICACIÓN enviado a alb172@correo.ugr.es: 968088
+2025-06-04 19:46:44,235 [INFO] Usuario alb172@correo.ugr.es verificado correctamente. TelegramID actualizado.
+2025-06-04 19:46:44,289 [ERROR] Error al enviar mensaje de bienvenida: cannot import name 'enviar_mensaje_bienvenida' from 'main' (c:\Users\Alberto\Desktop\TFG_V2\main.py)
+2025-06-04 19:48:37,162 [INFO] TOKEN DE VERIFICACIÓN enviado a velascofuentesclara@gmail.com: 732693
+2025-06-04 19:48:56,521 [INFO] Usuario velascofuentesclara@gmail.com verificado correctamente. TelegramID actualizado.
+2025-06-04 19:48:56,521 [ERROR] Error al enviar mensaje de bienvenida: cannot import name 'enviar_mensaje_bienvenida' from 'main' (c:\Users\Alberto\Desktop\TFG_V2\main.py)
+2025-06-05 14:23:27,595 [INFO] TOKEN DE VERIFICACIÓN enviado a alb172@correo.ugr.es: 818492
+2025-06-05 14:23:33,436 [INFO] Usuario alb172@correo.ugr.es verificado correctamente. TelegramID actualizado.
+2025-06-05 14:23:33,492 [ERROR] Error al enviar mensaje de bienvenida: cannot import name 'enviar_mensaje_bienvenida' from 'main' (c:\Users\Alberto\Desktop\TFG_V2\main.py)
+2025-06-05 17:18:16,439 [INFO] TOKEN DE VERIFICACIÓN enviado a alb172@correo.ugr.es: 203340
+2025-06-05 17:18:24,950 [INFO] Usuario alb172@correo.ugr.es verificado correctamente. TelegramID actualizado.
+2025-06-05 17:18:25,036 [ERROR] Error al enviar mensaje de bienvenida: cannot import name 'enviar_mensaje_bienvenida' from 'main' (c:\Users\Alberto\Desktop\TFG_V2\main.py)
+2025-06-05 19:59:49,665 [INFO] TOKEN DE VERIFICACIÓN enviado a velascofuentesclara@gmail.com: 870980
+2025-06-05 20:00:02,463 [INFO] Usuario velascofuentesclara@gmail.com verificado correctamente. TelegramID actualizado.
+2025-06-05 20:00:02,496 [ERROR] Error al enviar mensaje de bienvenida: cannot import name 'enviar_mensaje_bienvenida' from 'main' (c:\Users\Alberto\Desktop\TFG_V2\main.py)

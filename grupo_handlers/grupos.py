@@ -115,124 +115,7 @@ class GestionGrupos:
             'tiene_sala_tutoria': tiene_sala_tutoria
         }
     
-    def procesar_nuevo_grupo(self, update: Update, context: CallbackContext) -> int:
-        """Inicia el proceso cuando el bot es añadido a un grupo"""
-        chat = update.effective_chat
-        
-        # Verificar si el chat es un grupo o supergrupo
-        if chat.type not in ['group', 'supergroup']:
-            return ConversationHandler.END
-        
-        # Verificar si el bot fue añadido al grupo
-        if update.message and update.message.new_chat_members:
-            bot_added = any(member.id == context.bot.id for member in update.message.new_chat_members)
-            if not bot_added:
-                return ConversationHandler.END
-        
-        # Enviar instrucciones iniciales al grupo con un saludo cordial
-        update.message.reply_text(
-            "¡Hola a todos!\n\n"
-            "Soy el asistente para gestión de grupos de clase y tutorías. Es un placer "
-            "estar aquí y ayudar a organizar este espacio educativo.\n\n"
-            "Para poder configurar correctamente el grupo necesito ser administrador. "
-            "Por favor, sigue estos pasos:\n\n"
-            "1. Entra en la información del grupo\n"
-            "2. Selecciona 'Administradores'\n"
-            "3. Añádeme como administrador\n\n"
-            "Una vez me hayas hecho administrador, podré configurar este grupo "
-            "para tu clase o tutorías. ¡Gracias por tu confianza!"
-        )
-        
-        # Obtener información básica del chat
-        nombre_grupo = chat.title
-        
-        # Intentar obtener el enlace de invitación existente
-        try:
-            chat_info = context.bot.get_chat(chat.id)
-            enlace_grupo = chat_info.invite_link
-            
-            # Si el enlace no existe, verificamos si podemos acceder a él (somos admin)
-            if not enlace_grupo:
-                # Verificamos si somos administradores
-                bot_member = context.bot.get_chat_member(chat.id, context.bot.id)
-                if bot_member.status in ['administrator', 'creator']:
-                    # No generamos un nuevo enlace, solo informamos que no hay uno disponible
-                    update.message.reply_text(
-                        "Ahora soy administrador, pero este grupo no tiene un enlace de invitación activo. "
-                        "Puedes crear uno manualmente desde la configuración del grupo."
-                    )
-                    return ConversationHandler.END
-                else:
-                    # No somos administradores todavía
-                    self.logger.info("El bot aún no es administrador")
-                    return ConversationHandler.END
-            
-            # Si llegamos aquí, tenemos el enlace y somos administradores
-            # Almacenar datos del grupo en el contexto
-            context.user_data['grupo_nombre'] = nombre_grupo
-            context.user_data['grupo_enlace'] = enlace_grupo
-            
-            # Obtener el usuario que añadió al bot (asumimos que es el profesor)
-            if update.message and update.message.from_user:
-                id_profesor = update.message.from_user.id
-                context.user_data['id_profesor'] = id_profesor
-                
-                # Verificar las salas que ya tiene creadas el profesor
-                salas_existentes = self.verificar_salas_existentes(id_profesor)
-                
-                # Obtener asignaturas del profesor
-                asignaturas = self.obtener_asignaturas_profesor(id_profesor)
-                
-                if not asignaturas:
-                    update.message.reply_text("No tienes asignaturas asociadas en el sistema.")
-                    return ConversationHandler.END
-                
-                # Crear teclado inline con opciones (solo para asignaturas sin sala)
-                keyboard = []
-                asignaturas_disponibles = False
-                
-                for id_asig, nombre_asig in asignaturas:
-                    if id_asig not in salas_existentes['asignaturas_con_sala']:
-                        keyboard.append([InlineKeyboardButton(nombre_asig, callback_data=f"asig_{id_asig}")])
-                        asignaturas_disponibles = True
-                
-                # Añadir opción para tutorías (solo si no tiene ya una sala de tutorías)
-                if not salas_existentes['tiene_sala_tutoria']:
-                    keyboard.append([InlineKeyboardButton("Sala de Tutorías Individuales", callback_data="tutoria")])
-                
-                # Si no hay opciones disponibles, informar al profesor
-                if not asignaturas_disponibles and salas_existentes['tiene_sala_tutoria']:
-                    update.message.reply_text(
-                        "Ya tienes salas creadas para todas tus asignaturas y una sala de tutorías. "
-                        "No puedes crear más salas. Si necesitas reconfigurar una sala, "
-                        "contacta con el administrador del sistema."
-                    )
-                    return ConversationHandler.END
-                
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                # Enviar mensaje al chat privado con el profesor
-                context.bot.send_message(
-                    chat_id=id_profesor,
-                    text=f"¡Ya puedo configurar el grupo '{nombre_grupo}'! "
-                         f"¿A qué asignatura quieres asociar este grupo?",
-                    reply_markup=reply_markup
-                )
-                
-                # También confirmar en el grupo
-                update.message.reply_text(
-                    "¡Genial! Ya tengo los permisos necesarios.\n"
-                    "He enviado un mensaje privado al profesor para completar la configuración."
-                )
-                
-                return ELEGIR_TIPO
-                
-        except Exception as e:
-            # Error al acceder a la información del chat
-            self.logger.error(f"Error al acceder a la información del chat: {e}")
-            # No hacemos nada más, esperamos a que el profesor haga admin al bot
-            
-        return ConversationHandler.END
+
     
     def procesar_eleccion(self, update: Update, context: CallbackContext) -> int:
         """Procesa la elección del profesor sobre el tipo de sala"""
@@ -679,8 +562,7 @@ class GestionGrupos:
         keyboard = []
         for id_asig, nombre_asig in asignaturas:
             if id_asig != sala_info[3]:  # No mostrar la asignatura actual
-                keyboard.append([InlineKeyboardButton(nombre_asig, callback_data=f"asignar_{id_asig}")])
-        
+                keyboard.append([InlineKeyboardButton(nombre_asig, callback_data=f"asignar_{id_asig}")])        
         keyboard.append([InlineKeyboardButton("Cancelar", callback_data="cancelar")])
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -963,320 +845,53 @@ class GestionGrupos:
         
         return ConversationHandler.END
 
-    def registrar_handlers(self, dispatcher):
-        """Registra los handlers necesarios para la gestión de grupos"""
-        # Handler para cuando el bot es añadida al grupo
-        conv_handler = ConversationHandler(
-            entry_points=[
-                MessageHandler(
-                    filters.StatusUpdate.NEW_CHAT_MEMBERS, 
-                    self.procesar_nuevo_grupo
-                )
-            ],
-            states={
-                ELEGIR_TIPO: [CallbackQueryHandler(self.procesar_eleccion)],
-            },
-            fallbacks=[]
-        )
-        dispatcher.add_handler(conv_handler)
+    def registrar_handlers(self, bot):
+        """Registra los handlers necesarios para la gestión de grupos en telebot"""
         
-        # Handler para el comando /finalizar (usado tanto por profesores como por alumnos)
-        finalizar_handler = ConversationHandler(
-            entry_points=[CommandHandler('finalizar', self.finalizar_sesion)],
-            states={
-                BUSCAR_ALUMNO: [CallbackQueryHandler(self.procesar_opcion_busqueda)],
-                SELECCIONAR_ALUMNO: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.buscar_alumno)],
-                CONFIRMAR_EXPULSION: [
-                    CallbackQueryHandler(self.confirmar_expulsion, pattern=r"^user_"),
-                    CallbackQueryHandler(self.ejecutar_expulsion, pattern=r"^confirm|cancel$"),
-                    CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=r"^cancelar$")
-                ],
-            },
-            fallbacks=[CommandHandler('cancelar', lambda u, c: ConversationHandler.END)]
-        )
-        dispatcher.add_handler(finalizar_handler)
+        print("\n==================================================")
+        print("🔧🔧🔧 REGISTRANDO HANDLERS DE GESTION_GRUPOS 🔧🔧🔧")
+        print("==================================================\n")
         
-        # Handler para cambiar asignatura de sala
-        cambiar_asignatura_handler = ConversationHandler(
-            entry_points=[CommandHandler('cambiar_asignatura', self.cambiar_asignatura_sala)],
-            states={
-                SELECCIONAR_SALA: [CallbackQueryHandler(lambda u, c: self.procesar_cambio_asignatura(u, c) 
-                                                 if not u.callback_query.data == "cancelar" 
-                                                 else ConversationHandler.END)],
-                SELECCIONAR_ASIGNATURA: [CallbackQueryHandler(self.confirmar_cambio_asignatura)],
-                CONFIRMAR_CAMBIO: [CallbackQueryHandler(self.ejecutar_cambio_asignatura)],
-            },
-            fallbacks=[CommandHandler('cancelar', lambda u, c: ConversationHandler.END)]
-        )
-        dispatcher.add_handler(cambiar_asignatura_handler)
+        # IMPORTANTE: ELIMINAR cualquier handler de new_chat_members aquí
+        # para que no entre en conflicto con el que ya está definido en bot_grupo_main.py
         
-        # Handler para eliminar sala
-        eliminar_sala_handler = ConversationHandler(
-            entry_points=[CommandHandler('eliminar_sala', self.eliminar_sala)],
-            states={
-                CONFIRMAR_ELIMINAR_SALA: [
-                    CallbackQueryHandler(self.ejecutar_eliminar_sala, pattern=r"^eliminar_"),
-                    CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=r"^cancelar$")
-                ],
-                CONFIRMAR_ELIMINAR_SALA_FINAL: [
-                    CallbackQueryHandler(self.confirmar_eliminar_sala_final)
-                ],
-            },
-            fallbacks=[CommandHandler('cancelar', lambda u, c: ConversationHandler.END)]
-        )
-        dispatcher.add_handler(eliminar_sala_handler)
-
-        # Añadir handler para expulsar miembros no registrados
-        dispatcher.add_handler(ChatMemberHandler(self.filtrar_miembros_no_registrados, ChatMemberHandler.CHAT_MEMBER))
-
-def register_handlers(bot):
-    # ... código existente ...
-
-    # Manejador para el botón de finalizar tutoría
-    @bot.message_handler(func=lambda message: message.text == "❌ Terminar Tutoria")
-    def handle_terminar_tutoria(message):
-        try:
-            chat_id = message.chat.id
-            user_id = message.from_user.id
-            
-            print(f"🔄 Botón 'Terminar Tutoria' pulsado por el usuario {user_id} en chat {chat_id}")
-            
-            # Verificamos que estamos en un grupo
-            if message.chat.type not in ['group', 'supergroup']:
-                bot.send_message(chat_id, "Este comando solo funciona en grupos de tutoría.")
-                return
-            
-            # Obtener información del usuario que pulsó
-            conn = get_db_connection()
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            
-            cursor.execute("SELECT * FROM Usuarios WHERE TelegramID = ?", (user_id,))
-            user = cursor.fetchone()
-            
-            if not user:
-                bot.send_message(chat_id, "❌ No estás registrado en el sistema.")
-                conn.close()
-                return
-            
-            # Obtener información de la sala
-            cursor.execute("""
-                SELECT * FROM Grupos_tutoria WHERE Chat_id = ? AND Proposito_sala = 'individual'
-            """, (str(chat_id),))
-            
-            sala = cursor.fetchone()
-            
-            if not sala:
-                conn.close()
-                return
-                
-            sala_id = sala['id_sala']
-            
-            # Comportamiento diferente según el tipo de usuario
-            if user['Tipo'] == 'estudiante':
-                # CASO 1: ESTUDIANTE - Expulsar al estudiante directamente
-                nombre_completo = f"{user['Nombre']} {user['Apellidos'] or ''}".strip()
-                
-                # Actualizar estado en la base de datos
-                cursor.execute("""
-                    UPDATE Miembros_Grupo 
-                    SET Estado = 'pausado' 
-                    WHERE id_sala = ? AND Id_usuario = ?
-                """, (sala_id, user['Id_usuario']))
-                conn.commit()
-                
-                # Mensaje de despedida
-                bot.send_message(
-                    chat_id, 
-                    f"👋 *Tutoría finalizada*\n\n"
-                    f"El estudiante {nombre_completo} ha finalizado su tutoría.\n"
-                    f"¡Gracias por utilizar el sistema de tutorías!",
-                    parse_mode="Markdown"
-                )
-                
-                # Expulsar temporalmente al estudiante (1 minuto)
-                try:
-                    # Calcular tiempo de expulsión (1 minuto desde ahora)
-                    tiempo_expulsion = int(time.time() + 60)  # 60 segundos
-                    
-                    # Intentar expulsar
-                    bot.ban_chat_member(chat_id, user_id, until_date=tiempo_expulsion)
-                    print(f"✅ Usuario {user_id} expulsado del grupo {chat_id} por 1 minuto")
-                    
-                    # Notificar al estudiante por mensaje privado
-                    try:
-                        bot.send_message(
-                            user_id,
-                            "✅ *Tutoría finalizada correctamente*\n\n"
-                            "Has sido expulsado temporalmente del grupo de tutoría.\n"
-                            "Podrás volver a entrar para una nueva tutoría después de 1 minuto.",
-                            parse_mode="Markdown"
-                        )
-                    except Exception as e:
-                        print(f"Error al enviar mensaje privado: {e}")
-                except Exception as e:
-                    print(f"Error al expulsar usuario: {e}")
-                    bot.send_message(
-                        chat_id,
-                        "⚠️ No se pudo expulsar automáticamente al estudiante.\n"
-                        "Por favor, verifica los permisos del bot en el grupo.",
-                        parse_mode="Markdown"
-                    )
-            elif user['Tipo'] == 'profesor':
-                # CASO 2: PROFESOR - Mostrar lista de estudiantes para seleccionar
-                cursor.execute("""
-                    SELECT u.Id_usuario, u.Nombre, u.Apellidos, u.TelegramID
-                    FROM Miembros_Grupo m
-                    JOIN Usuarios u ON m.Id_usuario = u.Id_usuario
-                    WHERE m.id_sala = ? AND u.Tipo = 'estudiante' AND m.Estado = 'activo'
-                    ORDER BY u.Nombre
-                """, (sala_id,))
-                
-                estudiantes = cursor.fetchall()
-                
-                if not estudiantes:
-                    bot.send_message(
-                        chat_id, 
-                        "📊 *No hay estudiantes*\n\nNo hay estudiantes activos en esta tutoría para expulsar.",
-                        parse_mode="Markdown"
-                    )
-                    conn.close()
-                    return
-                
-                # Crear un mensaje con la lista de estudiantes para seleccionar
-                mensaje = "👨‍🎓 *Selecciona el estudiante que ha terminado su tutoría:*\n\n"
-                mensaje += "El estudiante será expulsado temporalmente (1 minuto) del grupo y podrá volver a entrar cuando necesite otra tutoría.\n\n"
-                
-                # Crear botones inline con los estudiantes
-                markup = types.InlineKeyboardMarkup(row_width=1)
-                
-                for estudiante in estudiantes:
-                    nombre_completo = f"{estudiante['Nombre']} {estudiante['Apellidos'] or ''}".strip()
-                    # Incluir ID de usuario y TelegramID en el callback_data
-                    callback_data = f"expulsar_{sala_id}_{estudiante['Id_usuario']}_{estudiante['TelegramID'] or '0'}"
-                    markup.add(types.InlineKeyboardButton(
-                        text=nombre_completo,
-                        callback_data=callback_data
-                    ))
-                
-                # Añadir botón para cancelar
-                markup.add(types.InlineKeyboardButton(
-                    text="❌ Cancelar",
-                    callback_data="cancelar_expulsion"
-                ))
-                
-                # Enviar mensaje con opciones
-                bot.send_message(
-                    chat_id,
-                    mensaje,
-                    reply_markup=markup,
-                    parse_mode="Markdown"
-                )
-            
-            conn.close()
-            
-        except Exception as e:
-            print(f"Error en handle_terminar_tutoria: {e}")
-            import traceback
-            traceback.print_exc()
-            bot.send_message(chat_id, "❌ Ocurrió un error al procesar tu solicitud.")
-
-    # También necesitas manejar los callbacks de los botones inline para cuando el profesor selecciona un estudiante
-    @bot.callback_query_handler(func=lambda call: call.data.startswith("expulsar_"))
-    def handle_expulsar_estudiante(call):
-        try:
-            chat_id = call.message.chat.id
-            profesor_id = call.from_user.id
-            
-            # Parsear el callback_data
-            _, sala_id, estudiante_id, telegram_id = call.data.split("_")
-            
-            # Convertir IDs a enteros
-            sala_id = int(sala_id)
-            estudiante_id = int(estudiante_id)
-            telegram_id = int(telegram_id) if telegram_id != '0' else None
-            
-            if not telegram_id:
-                bot.answer_callback_query(call.id, "❌ No se puede expulsar a este usuario porque no tiene ID de Telegram registrado")
-                return
-                
-            # Conectar a la base de datos
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            
-            # Verificar permisos del profesor
-            cursor.execute("SELECT * FROM Usuarios WHERE TelegramID = ? AND Tipo = 'profesor'", (profesor_id,))
-            profesor = cursor.fetchone()
-            
-            if not profesor:
-                bot.answer_callback_query(call.id, "❌ No tienes permisos para realizar esta acción")
-                conn.close()
-                return
-            
-            # Obtener información del estudiante
-            cursor.execute("SELECT * FROM Usuarios WHERE Id_usuario = ?", (estudiante_id,))
-            estudiante = cursor.fetchone()
-            
-            if not estudiante:
-                bot.answer_callback_query(call.id, "❌ Estudiante no encontrado")
-                conn.close()
-                return
-                
-            # Actualizar estado del estudiante en la base de datos
-            cursor.execute("""
-                UPDATE Miembros_Grupo 
-                SET Estado = 'pausado' 
-                WHERE id_sala = ? AND Id_usuario = ?
-            """, (sala_id, estudiante_id))
-            conn.commit()
-            
-            # Crear nombre completo para mensajes
-            nombre_completo = f"{estudiante['Nombre']} {estudiante['Apellidos'] or ''}".strip()
-            
-            # Calcular tiempo de expulsión (1 minuto desde ahora)
-            tiempo_expulsion = int(time.time() + 60)  # 60 segundos
-            
-            # Expulsar al estudiante
-            try:
-                bot.ban_chat_member(chat_id, telegram_id, until_date=tiempo_expulsion)
-                
-                # Notificar en el grupo
-                bot.edit_message_text(
-                    f"✅ *Estudiante expulsado*\n\n"
-                    f"El estudiante {nombre_completo} ha sido expulsado temporalmente.\n"
-                    f"Podrá volver a unirse al grupo después de 1 minuto.",
-                    chat_id=chat_id,
-                    message_id=call.message.message_id,
-                    parse_mode="Markdown"
-                )
-                
-                # Notificar al estudiante por mensaje privado
-                try:
-                    bot.send_message(
-                        telegram_id,
-                        "✅ *Tutoría finalizada por el profesor*\n\n"
-                        "Has sido expulsado temporalmente del grupo de tutoría.\n"
-                        "Podrás volver a entrar para una nueva tutoría después de 1 minuto.",
-                        parse_mode="Markdown"
-                    )
-                except Exception as e:
-                    print(f"Error al enviar mensaje privado: {e}")
-                
-            except Exception as e:
-                print(f"Error al expulsar estudiante: {e}")
-                bot.edit_message_text(
-                    f"❌ *Error al expulsar*\n\n"
-                    f"No se pudo expulsar al estudiante {nombre_completo}.\n"
-                    f"Error: {str(e)}",
-                    chat_id=chat_id,
-                    message_id=call.message.message_id,
-                    parse_mode="Markdown"
-                )
-                
-            conn.close()
-            
-        except Exception as e:
-            print(f"Error en handle_expulsar_estudiante: {e}")
-            import traceback
-            traceback.print_exc()
-            bot.answer_callback_query(call.id, "❌ Error al procesar la solicitud")
+        # Comandos
+        @bot.message_handler(commands=['finalizar'])
+        def finalizar_handler(message):
+            print("🔄 Comando finalizar recibido")
+            self.finalizar_sesion(message)
+        
+        @bot.message_handler(commands=['eliminar_sala'])
+        def eliminar_sala_handler(message):
+            print("🔄 Comando eliminar_sala recibido")
+            self.eliminar_sala(message)
+        
+        @bot.message_handler(commands=['cambiar_asignatura'])
+        def cambiar_asignatura_handler(message):
+            print("🔄 Comando cambiar_asignatura recibido")
+            self.cambiar_asignatura_sala(message)
+        
+        # IMPORTANTE: NO registrar un handler para new_chat_members aquí
+        # Ya que está definido en bot_grupo_main.py
+        
+        # Callbacks
+        @bot.callback_query_handler(func=lambda call: call.data.startswith("eliminar_"))
+        def ejecutar_eliminar_sala_handler(call):
+            self.ejecutar_eliminar_sala(call)
+        
+        @bot.callback_query_handler(func=lambda call: call.data == "cancelar")
+        def cancelar_handler(call):
+            bot.answer_callback_query(call.id, "Operación cancelada")
+        
+        # Más callbacks según necesites
+        @bot.callback_query_handler(func=lambda call: call.data.startswith("sala_"))
+        def seleccionar_sala_handler(call):
+            self.procesar_cambio_asignatura(call, bot)
+        
+        @bot.callback_query_handler(func=lambda call: call.data.startswith("asignar_"))
+        def asignar_handler(call):
+            self.confirmar_cambio_asignatura(call, bot)
+        
+        @bot.callback_query_handler(func=lambda call: call.data.startswith("cambiar_"))
+        def confirmar_cambio_handler(call):
+            self.ejecutar_cambio_asignatura(call, bot)

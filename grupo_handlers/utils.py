@@ -8,6 +8,8 @@ import sys
 import os
 from pathlib import Path
 from telebot import types
+import sqlite3
+import threading
 
 # Configurar paths para importaciones
 root_path = str(Path(__file__).parent.parent.absolute())
@@ -238,3 +240,65 @@ def send_markdown_message(bot, chat_id, text, reply_markup=None):
             parse_mode=None,
             reply_markup=reply_markup
         )
+
+# Un lock global para sincronizar acceso a la base de datos
+db_lock = threading.RLock()
+
+def execute_db_operation(operation_func, max_retries=5, retry_delay=0.5):
+    """
+    Ejecuta una operación de base de datos con reintentos y manejo de bloqueos.
+    
+    Args:
+        operation_func: Función que recibe una conexión y cursor y realiza operaciones DB
+        max_retries: Número máximo de intentos si hay bloqueo
+        retry_delay: Tiempo de espera entre reintentos
+    
+    Returns:
+        El resultado de operation_func o None si falla
+    """
+    from db.queries import get_db_connection
+    
+    retries = 0
+    while retries < max_retries:
+        conn = None
+        try:
+            # Adquirir lock para evitar competencia
+            with db_lock:
+                conn = get_db_connection()
+                # Configurar timeout más largo para esperar que se libere el bloqueo
+                conn.execute("PRAGMA busy_timeout = 5000")
+                cursor = conn.cursor()
+                
+                # Ejecutar la operación proporcionada
+                result = operation_func(conn, cursor)
+                
+                # Commit si todo salió bien
+                conn.commit()
+                return result
+                
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                retries += 1
+                logging.warning(f"Base de datos bloqueada, reintento {retries}/{max_retries}")
+                time.sleep(retry_delay)
+            else:
+                logging.error(f"Error de base de datos: {e}")
+                import traceback
+                traceback.print_exc()
+                return None
+        except Exception as e:
+            logging.error(f"Error ejecutando operación de BD: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+        finally:
+            # Asegurar que siempre se cierra la conexión
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
+    
+    # Si llegamos aquí, se agotaron los reintentos
+    logging.error("Máximo de reintentos alcanzado para operación de BD")
+    return None

@@ -7,6 +7,7 @@ DB_PATH = Path(__file__).parent.parent / "tutoria_ugr.db"
 
 def get_db_connection():
     """Obtiene una conexión a la base de datos"""
+
     return sqlite3.connect(str(DB_PATH))
 
 def create_database():
