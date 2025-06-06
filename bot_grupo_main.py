@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 # Importar utilidades y handlers
 from grupo_handlers.grupos import GestionGrupos
 from grupo_handlers.valoraciones import register_handlers as register_valoraciones_handlers
+from grupo_handlers.usuarios import register_student_handlers
 from grupo_handlers.utils import (
     limpiar_estados_obsoletos, es_profesor, menu_profesor, menu_estudiante, 
     configurar_logger, configurar_comandos_por_rol
@@ -949,107 +950,8 @@ def handle_group_creation(message):
         "Una vez me hayas hecho administrador, usa el comando /configurar_grupo."
     )
 
-# Reemplaza tu actual handle_new_chat_members con esta implementación mejorada:
-@bot.message_handler(content_types=['new_chat_members'])
-def handle_new_chat_members(message):
-    """Maneja cuando un nuevo miembro se une al grupo"""
-    try:
-        chat_id = message.chat.id
-        for new_member in message.new_chat_members:
-            user_id = new_member.id
-
-            # Ignorar si es el propio bot
-            if user_id == bot.get_me().id:
-                return
-
-            # Obtener información del usuario
-            conn = get_db_connection()
-            cursor = conn.cursor()
-
-            # Verificar si el grupo es un grupo de tutorías registrado
-            cursor.execute("""
-                SELECT * FROM Grupos_tutoria WHERE Chat_id = ?
-            """, (str(chat_id),))
-
-            grupo = cursor.fetchone()
-
-            if not grupo:
-                # No es un grupo registrado
-                conn.close()
-                return
-
-            # Comprobar si el usuario está registrado
-            cursor.execute("SELECT * FROM Usuarios WHERE TelegramID = ?", (user_id,))
-            usuario = cursor.fetchone()
-
-            if not usuario:
-                # Usuario no registrado - enviar mensaje informativo
-                bot.send_message(
-                    chat_id, 
-                    f"👋 Bienvenido/a nuevo usuario.\n\n"
-                    f"Para poder participar completamente en este grupo, primero debes registrarte "
-                    f"con el bot principal @TuBotPrincipal.",
-                    parse_mode="Markdown"
-                )
-                conn.close()
-                return
-
-            # Usuario registrado
-            nombre_completo = f"{usuario['Nombre']} {usuario['Apellidos'] or ''}".strip()
-            tipo_usuario = usuario['Tipo']
-
-            print(f"Nuevo miembro en grupo {chat_id}: {nombre_completo} ({tipo_usuario})")
-
-            # Mensaje de bienvenida personalizado según el tipo de usuario
-            if tipo_usuario == 'estudiante':
-                # Enviar mensaje de bienvenida para estudiantes
-                mensaje = (
-                    f"👋 ¡Bienvenido/a *{nombre_completo}*!\n\n"
-                    f"Te has unido a una sala de tutoría. Cuando finalices tu consulta, "
-                    f"pulsa el botón '❌ Terminar Tutoria' para salir."
-                )
-
-                # Registrar al estudiante en la base de datos
-                try:
-                    # Solo si es un grupo de tutorías individuales
-                    if grupo['Proposito_sala'] == 'individual':
-                        cursor.execute("""
-                            INSERT INTO Miembros_Grupo (id_sala, Id_usuario, Fecha_union, Estado)
-                            VALUES (?, ?, CURRENT_TIMESTAMP, 'activo')
-                        """, (grupo['id_sala'], usuario['Id_usuario']))
-                        conn.commit()
-                except Exception as e:
-                    print(f"Error al registrar estudiante en grupo: {e}")
-
-                # Enviar mensaje con botón
-                bot.send_message(
-                    chat_id, 
-                    mensaje,
-                    reply_markup=menu_estudiante(),
-                    parse_mode="Markdown"
-                )
-
-            elif tipo_usuario == 'profesor':
-                # Enviar mensaje de bienvenida para profesores
-                mensaje = (
-                    f"👨‍🏫 ¡Bienvenido/a Profesor/a *{nombre_completo}*!\n\n"
-                    f"Este es tu grupo de tutorías. Para expulsar a un estudiante cuando termine "
-                    f"su consulta, usa el botón '❌ Terminar Tutoria'."
-                )
-
-                bot.send_message(
-                    chat_id, 
-                    mensaje,
-                    reply_markup=menu_profesor(),
-                    parse_mode="Markdown"
-                )
-
-            conn.close()
-
-    except Exception as e:
-        print(f"Error al dar la bienvenida a nuevo miembro: {e}")
-        import traceback
-        traceback.print_exc()
+# ELIMINADO: El handler handle_new_chat_members ya no está aquí
+# Se ha movido a usuarios.py
 
 # Registrar handlers externos
 if __name__ == "__main__":
@@ -1066,16 +968,23 @@ if __name__ == "__main__":
     limpieza_thread.start()
     
     try:
-        # Registrar handlers de módulos externos
+        # Registrar handlers de usuarios primero para darle prioridad
+        from grupo_handlers.usuarios import register_student_handlers
+        register_student_handlers(bot)
+        print("✅ Handler de nuevos estudiantes registrado")
+        
+        # Registrar otros handlers
         gestion_grupos = GestionGrupos(db_path="db/tutoria.db")
         gestion_grupos.registrar_handlers(bot)
-        register_valoraciones_handlers(bot)
+        print("✅ Handlers de gestión de grupos registrados")
         
-        print("✅ Todos los handlers registrados correctamente")
+        register_valoraciones_handlers(bot)
+        print("✅ Handlers de valoraciones registrados")
+        
         print("🤖 Bot iniciando polling...")
         
-        # Usar polling normal
-        bot.polling(none_stop=True, interval=0, timeout=20)
+        # Usar polling normal con timeout extendido
+        bot.polling(none_stop=True, interval=0, timeout=60)
         
     except Exception as e:
         logger.critical(f"Error crítico al iniciar el bot: {e}")
