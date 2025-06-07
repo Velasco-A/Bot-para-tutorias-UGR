@@ -547,3 +547,4 @@
 2025-06-06 16:13:13,833 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
 2025-06-06 16:16:53,972 [INFO] Cargando variables desde c:\Users\Alberto\Desktop\TFG_V2\datos.env.txt
 2025-06-06 16:16:53,972 [WARNING] TOKEN_GRUPO no encontrado, buscando TOKEN_1 como alternativa
+2025-06-06 18:29:18,956 [CRITICAL] Error crítico al iniciar el bot: HTTPSConnectionPool(host='api.telegram.org', port=443): Read timed out. (read timeout=60)

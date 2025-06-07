@@ -68,13 +68,13 @@ def handle_help(message):
         "/start - Inicia el bot y el proceso de registro\n"
         "/help - Muestra este mensaje de ayuda\n"
         "/tutoria - Ver profesores disponibles para tutoría\n"
-        "/ver\\_misdatos - Ver tus datos registrados\n"
+        "/ver_misdatos - Ver tus datos registrados\n"
     )
     
     if user['Tipo'] == 'profesor':
         help_text += (
-            "/configurar\\_horario - Configura tu horario de tutorías\n"
-            "/crear\\_grupo\\_tutoria - Crea un grupo de tutoría\n"
+            "/configurar_horario - Configura tu horario de tutorías\n"
+            "/crear_grupo_tutoria - Crea un grupo de tutoría\n"
         )
     
     # Escapar los guiones bajos para evitar problemas de formato
@@ -1145,7 +1145,7 @@ def crear_grupo(message):
         "2️⃣ Añadir el bot al grupo\n"
         "• Pulse el nombre del grupo\n"
         "• Seleccione 'Administradores'\n"
-        "• Añada a @UGRTutoriasBot como administrador\n"
+        "• Añada a @UGRBot como administrador\n"
         "• Active todos los permisos\n\n"
         
         "3️⃣ Configurar el grupo\n"
@@ -1169,7 +1169,7 @@ def crear_grupo(message):
     markup.add(
         types.InlineKeyboardButton(
             "📝 Ver mis salas actuales", 
-            callback_data="ver_salas"  # Simplificado
+            callback_data="ver_misdatos"  # Simplificado
         ),
         types.InlineKeyboardButton(
             "❓ Preguntas frecuentes",

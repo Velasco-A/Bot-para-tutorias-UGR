@@ -631,7 +631,7 @@ def handle_proposito_sala(call):
             f"{descripcion}\n\n"
             "Como profesor puedes:\n"
             "• Gestionar el grupo según el propósito configurado\n"
-            "• Compartir el enlace de invitación con tus estudiantes",
+            "• Eliminar alumnos cuando finalice la consulta",
             parse_mode="Markdown",
             reply_markup=menu_profesor()  # Esto ahora devuelve un ReplyKeyboardMarkup
         )
@@ -950,8 +950,7 @@ def handle_group_creation(message):
         "Una vez me hayas hecho administrador, usa el comando /configurar_grupo."
     )
 
-# ELIMINADO: El handler handle_new_chat_members ya no está aquí
-# Se ha movido a usuarios.py
+
 
 # Registrar handlers externos
 if __name__ == "__main__":
@@ -1011,9 +1010,10 @@ def handle_bot_status_update(update):
                 "¡Gracias por añadirme al grupo!\n\n"
                 "Para poder configurar correctamente el grupo necesito ser administrador. "
                 "Por favor, sigue estos pasos:\n\n"
-                "1. Entra en la información del grupo\n"
-                "2. Selecciona 'Administradores'\n"
-                "3. Añádeme como administrador\n\n"
+                "1.Pulsa en el nombre del grupo\n"
+                "2.Managed my chat\n"
+                "3. Selecciona añadir 'Administradores'\n"
+                "4. Añádeme como administrador\n\n"
                 "Una vez me hayas hecho administrador, usa el comando /configurar_grupo."
             )
             
